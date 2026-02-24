@@ -16,6 +16,7 @@ from tools.calendar_reader import get_today_events, get_upcoming_events, search_
 from tools.summarizer import fetch_and_summarize
 from tools.reminders import reminder_manager
 from tools.deep_think import deep_think
+from tools.samsung_tv import tv_control, tv_status, list_devices
 
 # ─── Schemas de tools para NVIDIA NIM (OpenAI function calling format) ────────
 
@@ -142,6 +143,44 @@ TOOL_SCHEMAS = [
                     "text": {"type": "string", "description": "Texto a escribir"},
                 },
                 "required": ["selector", "text"],
+            },
+        },
+    },
+    # ─── Samsung TV (SmartThings) ───────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "samsung_list_devices",
+            "description": "Lista todos los dispositivos disponibles en SmartThings (incluye TVs).",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "samsung_tv_status",
+            "description": "Obtiene el estado actual del TV (encendido/apagado).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "device_id": {"type": "string", "description": "ID del dispositivo TV (obtenido de samsung_list_devices)"},
+                },
+                "required": ["device_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "samsung_tv_control",
+            "description": "Controla el Samsung TV: enciéndelo, apágalo, sube/baja volumen o silencia.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "device_id": {"type": "string", "description": "ID del dispositivo TV"},
+                    "command": {"type": "string", "description": "Comando: 'on', 'off', 'up', 'down', 'mute', 'unmute'"},
+                },
+                "required": ["device_id", "command"],
             },
         },
     },
@@ -651,6 +690,14 @@ class ToolDispatcher:
             case "browser_fill":
                 browser = await BrowserTool.get_instance()
                 return await browser.fill(args["selector"], args["text"])
+
+            # Samsung TV (SmartThings)
+            case "samsung_list_devices":
+                return list_devices()
+            case "samsung_tv_status":
+                return tv_status(args["device_id"])
+            case "samsung_tv_control":
+                return tv_control(args["device_id"], args["command"])
 
             # Gym — Entrenamiento completo en un solo mensaje
             case "gym_save_workout":
