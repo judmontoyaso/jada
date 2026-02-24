@@ -1,0 +1,48 @@
+# =============================================
+#  MiniClaw — .gitignore
+# =============================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+
+# --- Entornos virtuales ---
+.venv/
+venv/
+env/
+
+# --- Variables de entorno (contienen secretos) ---
+.env
+
+# --- Bases de datos auto-generadas ---
+*.db
+
+# --- Crypto store (E2EE keys, si se usa) ---
+crypto_store/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*.code-workspace
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Playwright ---
+playwright-report/
+test-results/
+
+# --- Archivos temporales ---
+*.tmp
+*.log
+_sample.json
