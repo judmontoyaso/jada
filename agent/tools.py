@@ -163,9 +163,9 @@ TOOL_SCHEMAS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "device_id": {"type": "string", "description": "ID del dispositivo TV (obtenido de samsung_list_devices)"},
+                    "device_id": {"type": "string", "description": "ID del dispositivo TV (Opcional)"},
                 },
-                "required": ["device_id"],
+                "required": [],
             },
         },
     },
@@ -177,10 +177,10 @@ TOOL_SCHEMAS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "device_id": {"type": "string", "description": "ID del dispositivo TV"},
-                    "command": {"type": "string", "description": "Comando: 'on', 'off', 'up', 'down', 'mute', 'unmute'"},
+                    "device_id": {"type": "string", "description": "ID del dispositivo TV (Opcional)"},
+                    "command": {"type": "string", "description": "Comando: 'on', 'off', 'up', 'down', 'mute', 'unmute', 'ok', 'back', 'home', 'menu', 'source', 'hdmi1', 'hdmi2', 'hdmi3'"},
                 },
-                "required": ["device_id", "command"],
+                "required": ["command"],
             },
         },
     },
@@ -697,7 +697,7 @@ class ToolDispatcher:
             case "samsung_tv_status":
                 return tv_status(args["device_id"])
             case "samsung_tv_control":
-                return tv_control(args["device_id"], args["command"])
+                return tv_control(action=args["command"], device_name=args.get("device_id"))
 
             # Gym — Entrenamiento completo en un solo mensaje
             case "gym_save_workout":

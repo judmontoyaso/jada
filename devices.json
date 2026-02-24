@@ -1,0 +1,345 @@
+{
+  "items": [
+    {
+      "deviceId": "a367614d-4fd5-42c4-b495-5f199cdadbc9",
+      "name": "SmartThings Hub",
+      "label": "Hub - BRR",
+      "manufacturerName": "SmartThingsCommunity",
+      "presentationId": "9a462f39-1673-3e8f-8c20-df61dc237517",
+      "deviceManufacturerCode": "SAMSUNG",
+      "locationId": "385f84b5-adc2-42be-b26a-71c6a5073956",
+      "ownerId": "c67b8a9d-419d-6e97-eac5-b7dd193e7ab0",
+      "roomId": "cf7a5bfd-990e-4cfa-95ee-a25edb69e84c",
+      "components": [
+        {
+          "id": "main",
+          "label": "main",
+          "capabilities": [
+            {
+              "id": "bridge",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "Hub",
+              "categoryType": "manufacturer"
+            }
+          ],
+          "optional": false
+        }
+      ],
+      "createTime": "2026-02-24T19:37:51.756Z",
+      "profile": {
+        "id": "b675d992-2595-3427-a942-d5ef7ba6890c"
+      },
+      "hub": {
+        "hubEui": "D052A802ACCF000D",
+        "firmwareVersion": "000.058.00013",
+        "hubDrivers": [
+          {
+            "driverVersion": "2025-07-28T20:45:03.83690244",
+            "driverId": "01976eca-e7ff-4d1b-91db-9c980ce668d7",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2024-10-10T18:17:35.032104982",
+            "driverId": "4eb5b19a-7bbc-452f-859b-c6d7d857b2da",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2025-02-03T22:38:47.582952919",
+            "driverId": "7beb8bc2-8dfa-45c2-8fdb-7373d4597b12",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2024-10-21T19:06:49.949052991",
+            "driverId": "9050ac53-358c-47a1-a927-9a70f5f28cee",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2026-02-02T18:35:22.128991992",
+            "driverId": "c21a6c77-872c-474e-be5b-5f6f11a240ef",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2024-01-30T21:36:15.547412569",
+            "driverId": "c856a3fd-69ee-4478-a224-d7279b6d978f",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2026-01-26T23:44:30.725006043",
+            "driverId": "cd898d81-6c27-4d27-a529-dfadc8caae5a",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2025-03-10T21:36:12.512604403",
+            "driverId": "d9c3f8b8-c3c3-4b77-9ddd-01d08102c84b",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          },
+          {
+            "driverVersion": "2024-10-10T18:17:54.195543653",
+            "driverId": "dbe192cb-f6a1-4369-a843-d1c42e5c91ba",
+            "channelId": "15ea8adc-8be7-4ea6-8b51-4155f56dc6cf"
+          }
+        ],
+        "hubData": {
+          "serialNumber": "7c92ccde-594b-416c-a815-3a28c18429b8",
+          "zwaveStaticDsk": "00000-00000-00000-00000-00000-00000-00000-00000",
+          "zwaveS2": false,
+          "hardwareType": "SAMSUNG_VD_TV_HUB",
+          "hardwareId": "0043",
+          "zigbeeFirmware": "0.0.0",
+          "zigbee3": false,
+          "zigbeeOta": "ENABLED",
+          "otaEnable": "true",
+          "zigbeeUnsecureRejoin": false,
+          "zigbeeRequiresExternalHardware": true,
+          "threadRequiresExternalHardware": true,
+          "failoverAvailability": "Unsupported",
+          "primarySupportAvailability": "Unsupported",
+          "secondarySupportAvailability": "Unsupported",
+          "zigbeeAvailability": "Unavailable",
+          "zwaveAvailability": "Unsupported",
+          "threadAvailability": "Unavailable",
+          "lanAvailability": "Available",
+          "matterAvailability": "Available",
+          "localVirtualDeviceAvailability": "Available",
+          "childDeviceAvailability": "Unsupported",
+          "edgeDriversAvailability": "Available",
+          "hubReplaceAvailability": "Unsupported",
+          "hubLocalApiAvailability": "Available",
+          "edgeDriverSupportedEndpointApps": {
+            "apps": [
+              {
+                "appName": "viper_12edd070-1b34-11f0-b145-1b5424e72149",
+                "version": "1"
+              }
+            ]
+          },
+          "zigbeeManualFirmwareUpdateSupported": true,
+          "matterRendezvousHedgeSupported": true,
+          "matterSoftwareComponentVersion": "1.4-0",
+          "matterDeviceDiagnosticsAvailability": "Available",
+          "zigbeeDeviceDiagnosticsAvailability": "Available",
+          "hedgeTlsCertificate": "-----BEGIN CERTIFICATE-----\nMIIGWTCCBEGgAwIBAgIBADANBgkqhkiG9w0BAQsFADCBqTELMAkGA1UEBhMCVVMx\nCzAJBgNVBAgMAk1OMRQwEgYDVQQHDAtNaW5uZWFwb2xpczEUMBIGA1UECgwLU21h\ncnRUaGluZ3MxODA2BgNVBAMML2hsYS10Y3AuYTM2NzYxNGQtNGZkNS00MmM0LWI0\nOTUtNWYxOTljZGFkYmM5LnN0MScwJQYJKoZIhvcNAQkBFhhzZWN1cml0eUBzbWFy\ndHRoaW5ncy5jb20wIBcNMjYwMjI0MTkzODAyWhgPMjA1MzA3MTIxOTM4MDJaMIGp\nMQswCQYDVQQGEwJVUzELMAkGA1UECAwCTU4xFDASBgNVBAcMC01pbm5lYXBvbGlz\nMRQwEgYDVQQKDAtTbWFydFRoaW5nczE4MDYGA1UEAwwvaGxhLXRjcC5hMzY3NjE0\nZC00ZmQ1LTQyYzQtYjQ5NS01ZjE5OWNkYWRiYzkuc3QxJzAlBgkqhkiG9w0BCQEW\nGHNlY3VyaXR5QHNtYXJ0dGhpbmdzLmNvbTCCAiIwDQYJKoZIhvcNAQEBBQADggIP\nADCCAgoCggIBALpGIlNJGSNegV3EzAF0z0DhagXhCU4tdJjvoMsyGUDGELvrjSQ+\nz2ll3HahIsUp91jiYruq5pbB/seRd0VftOeTPDb51bgPB5eYnRRnCFijAHrQfM+m\n2zLQFVEVhpa4IGNK1QlZvIyLK/2Qw1AXlv5C6TMz51QzQhNso8DfzV5mam0YPwoq\nIUwkILzmABb3AMZC0UmRGnecnYnpCwtlEBYj6VW4WAYAk9MWQkzUK4rDFKwe5tsn\nCcAurOzFlZloCU/YRlfksyY9jh7C05voIz36Ra3nkIBLN6Xnewazexc2U1vUGzd6\nqq9DLXvVHi8Ato5Q5DnFSh/fUqFHSgC/luykcP3Jkj1O70XFbc4XlANxOMV8w3Vv\nWi43B0aNbxSZGSKuORtZeWqypg2BXg/uLwu6T/V/d3oKI8c0O7hi+l1zoT7rSQRi\n8HmFtRaCyI6ChYAA2UVIZesQbCqtdMcBlHrzvhTTTulIMXCBtMSuUXS0Ybasfuum\npBhtEhNRQM0ZbIXZ1lK3t2V1Hnun9kShBQF1FtTHo/DOQsdHOp1z8HlUuk81ssGy\nk5s3DQGNSd/gmvl/Vc5nc5cp+Rdumngg/aegTLayz2o+QIxsTdj70YjZZZpO7BES\nm+XN6VWR3W2RawwBMRlhljFclG6YYRLPnriq9ceSThDfQrfPBl/wdHNHAgMBAAGj\ngYcwgYQwHQYDVR0OBBYEFMFuE/MMjgMPB75tMVmm9q2aa4xjMAkGA1UdEwQCMAAw\nCwYDVR0PBAQDAgWgMEsGA1UdEQREMEKCQHN2Yy1obGEtdGNwLmh1Yi1hMzY3NjE0\nZC00ZmQ1LTQyYzQtYjQ5NS01ZjE5OWNkYWRiYzkuc21hcnR0aGluZ3MwDQYJKoZI\nhvcNAQELBQADggIBAJ4nx4KNJhYL6dsacZuYDDa8dFhEeGhrIQAJauHmkKIEXC2J\nF0itm8u3tJNHxJLZj28t5W319nxbnd/459QjGCnA+ior+NIWVpbnHhUnb2m+oBgn\nEbUW6881F1SJRJrQhlS8W8cWyD13DviW96ziPIRXte0d2WtgIWHgsdtwDiZE/a/V\ndm4oq7i4vFVTVfA7tmNpFgx5CgjqXAr9Oep5QC8XqBXtOC8Yylk6OyfBgyXCB9jI\nO/4UGh3qmihZl3BgT8QVeBvkFwBqmwDUFNucc93QTyuLDRhlb81vwR+f16lU5y/1\nHuBDMwqpKQaJCEvmX5cMndwJhVWhm86VgJ7JJlZErlNbdJuojwYNNtJcprtKovmt\nKoC8QgPDoMd8/hrzTkLiES0XKDvuvUrtIS6zJMT6juRkkOikQZYIkxdcoC6GYXsJ\nQ8WzfUuCAKrpyDvtKh1EIF4JP2v7sbuoHPUD8bGs+NQQ4caK6yoj9Fv+6BvUnctU\nRLHr1sxFHsTCuS5JsUOuoiRUEGIBYnR0ZQKYTfsl08MhB7wPCLLo8Y89dSq3ONSF\n8M2aWVEMohD2UuvJ1VSrtc5Z36bphQiEjM+fe1nnimhEZPbo3BGlCCQbqPZ07tR7\noSMRMYpVF48i+lOJNvd9FnIAV+ao59UMx4ZyBdPniCsNPHLRTZRA/ydDU2S1\n-----END CERTIFICATE-----\n",
+          "zigbeeChannel": "0",
+          "zigbeePanId": "0000",
+          "zigbeeEui": "0000000000000000",
+          "zigbeeNodeID": "0000",
+          "zwaveNodeID": "00",
+          "zwaveHomeID": "00000000",
+          "zwaveSucID": "00",
+          "zwaveVersion": "0000",
+          "zwaveRegion": "0",
+          "macAddress": "A0:D0:5B:19:09:E4",
+          "localIP": "192.168.20.24",
+          "wifiSsid": "Brendar",
+          "zigbeeRadioFunctional": false,
+          "zwaveRadioFunctional": false,
+          "zigbeeRadioEnabled": false,
+          "zwaveRadioEnabled": false,
+          "zigbeeRadioDetected": false,
+          "zwaveRadioDetected": false,
+          "enrollmentChannel": "PUBLIC"
+        }
+      },
+      "type": "HUB",
+      "restrictionTier": 0,
+      "allowed": [],
+      "executionContext": "CLOUD",
+      "relationships": [
+        {
+          "deviceId": "8ce46e96-23b7-a84a-3d2c-93bc26bd5960",
+          "relationshipType": "COMBINATION",
+          "onDelete": "NONE",
+          "onLocationMove": "INCLUDE",
+          "onOwnershipTransfer": "INCLUDE"
+        }
+      ]
+    },
+    {
+      "deviceId": "8ce46e96-23b7-a84a-3d2c-93bc26bd5960",
+      "name": "BRR",
+      "label": "BRR",
+      "manufacturerName": "Samsung Electronics",
+      "presentationId": "VD-STV-2022",
+      "deviceManufacturerCode": "Samsung Electronics",
+      "locationId": "385f84b5-adc2-42be-b26a-71c6a5073956",
+      "ownerId": "c67b8a9d-419d-6e97-eac5-b7dd193e7ab0",
+      "roomId": "cf7a5bfd-990e-4cfa-95ee-a25edb69e84c",
+      "deviceTypeName": "Samsung OCF TV",
+      "components": [
+        {
+          "id": "main",
+          "label": "main",
+          "capabilities": [
+            {
+              "id": "ocf",
+              "version": 1
+            },
+            {
+              "id": "switch",
+              "version": 1
+            },
+            {
+              "id": "audioVolume",
+              "version": 1
+            },
+            {
+              "id": "audioMute",
+              "version": 1
+            },
+            {
+              "id": "tvChannel",
+              "version": 1
+            },
+            {
+              "id": "mediaInputSource",
+              "version": 1
+            },
+            {
+              "id": "mediaPlayback",
+              "version": 1
+            },
+            {
+              "id": "mediaTrackControl",
+              "version": 1
+            },
+            {
+              "id": "powerConsumptionReport",
+              "version": 1
+            },
+            {
+              "id": "custom.error",
+              "version": 1
+            },
+            {
+              "id": "custom.picturemode",
+              "version": 1
+            },
+            {
+              "id": "custom.soundmode",
+              "version": 1
+            },
+            {
+              "id": "custom.accessibility",
+              "version": 1
+            },
+            {
+              "id": "custom.launchapp",
+              "version": 1
+            },
+            {
+              "id": "custom.recording",
+              "version": 1
+            },
+            {
+              "id": "custom.tvsearch",
+              "version": 1
+            },
+            {
+              "id": "custom.disabledCapabilities",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.remoteControl",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.ambient",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.ambientContent",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.mediaInputSource",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.supportsFeatures",
+              "version": 1
+            },
+            {
+              "id": "samsungim.fixedFindNode",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.thingStatus",
+              "version": 1
+            },
+            {
+              "id": "sec.deviceConnectionState",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            },
+            {
+              "id": "execute",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.firmwareVersion",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.supportsPowerOnByOcf",
+              "version": 1
+            },
+            {
+              "id": "samsungvd.deviceCategory",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "Television",
+              "categoryType": "manufacturer"
+            }
+          ],
+          "optional": false
+        }
+      ],
+      "createTime": "2026-02-24T19:35:34.619Z",
+      "profile": {
+        "id": "10290e3c-5ac9-38a1-a205-b1df002aa1c8"
+      },
+      "ocf": {
+        "ocfDeviceType": "oic.d.tv",
+        "name": "BRR",
+        "specVersion": "core.1.1.0",
+        "verticalDomainSpecVersion": "res.1.1.0,sh.1.1.0",
+        "manufacturerName": "Samsung Electronics",
+        "modelNumber": "UN43BU8000KXZL",
+        "platformVersion": "6.5",
+        "platformOS": "Tizen",
+        "hwVersion": "",
+        "firmwareVersion": "T-KSU2EBUABC-1710.0|ST_ENERGY",
+        "vendorId": "VD-STV-2022",
+        "vendorResourceClientServerVersion": "5.0.22",
+        "lastSignupTime": "2026-02-24T19:35:34.476092249Z",
+        "transferCandidate": false,
+        "additionalAuthCodeRequired": false,
+        "modelCode": ""
+      },
+      "type": "OCF",
+      "restrictionTier": 0,
+      "allowed": [],
+      "executionContext": "CLOUD",
+      "relationships": [
+        {
+          "deviceId": "a367614d-4fd5-42c4-b495-5f199cdadbc9",
+          "relationshipType": "COMBINATION",
+          "onDelete": "CASCADE",
+          "onLocationMove": "INCLUDE",
+          "onOwnershipTransfer": "INCLUDE"
+        }
+      ]
+    }
+  ],
+  "_links": {}
+}

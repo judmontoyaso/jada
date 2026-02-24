@@ -50,7 +50,8 @@ def get_device_id(device_name=None):
     if device_name:
         for device in device_list:
             if device_name.lower() in device.get("label", "").lower() or \
-               device_name.lower() in device.get("name", "").lower():
+               device_name.lower() in device.get("name", "").lower() or \
+               device_name == device.get("deviceId"):
                 return device.get("deviceId")
     
     # Si no se especifica nombre, devuelve el primer TV encontrado
@@ -80,72 +81,53 @@ def tv_control(action: str, device_name: str = None):
     if not device_id:
         return {"success": False, "error": "No se encontró el dispositivo"}
     
-    # Map de comandos para SmartThings usando execute capability
-    commands = {
-        "on": {
-            "commands": [
-                {
-                    "capability": "execute",
-                    "command": "execute",
-                    "arguments": ["stsa://com.samsung.tv.power.on"]
-                }
-            ]
-        },
-        "off": {
-            "commands": [
-                {
-                    "capability": "execute",
-                    "command": "execute",
-                    "arguments": ["stsa://com.samsung.tv.power.off"]
-                }
-            ]
-        },
-        "up": {
-            "commands": [
-                {
-                    "capability": "execute",
-                    "command": "execute",
-                    "arguments": ["stsa://com.samsung.tv.volume.up"]
-                }
-            ]
-        },
-        "down": {
-            "commands": [
-                {
-                    "capability": "execute",
-                    "command": "execute",
-                    "arguments": ["stsa://com.samsung.tv.volume.down"]
-                }
-            ]
-        },
-        "mute": {
-            "commands": [
-                {
-                    "capability": "execute",
-                    "command": "execute",
-                    "arguments": ["stsa://com.samsung.tv.audio.mute"]
-                }
-            ]
-        },
-        "unmute": {
-            "commands": [
-                {
-                    "capability": "execute",
-                    "command": "execute",
-                    "arguments": ["stsa://com.samsung.tv.audio.unmute"]
-                }
-            ]
-        }
+    # Map de comandos para SmartThings
+    command_map = {
+        # Power — switch estándar, confirmado en capabilities
+        "on":      {"capability": "switch",                  "command": "on",             "args": []},
+        "off":     {"capability": "switch",                  "command": "off",            "args": []},
+
+        # Volumen
+        "up":      {"capability": "audioVolume",  "command": "volumeUp",   "args": []},
+        "down":    {"capability": "audioVolume",  "command": "volumeDown", "args": []},
+
+        # Mute
+        "mute":    {"capability": "audioMute",    "command": "mute",       "args": []},
+        "unmute":  {"capability": "audioMute",    "command": "unmute",     "args": []},
+
+        # Control remoto
+        "ok":      {"capability": "samsungvd.remoteControl", "command": "sendKey",        "args": ["OK"]},
+        "back":    {"capability": "samsungvd.remoteControl", "command": "sendKey",        "args": ["BACK"]},
+        "home":    {"capability": "samsungvd.remoteControl", "command": "sendKey",        "args": ["HOME"]},
+        "menu":    {"capability": "samsungvd.remoteControl", "command": "sendKey",        "args": ["MENU"]},
+        "source":  {"capability": "samsungvd.remoteControl", "command": "sendKey",        "args": ["SOURCE"]},
+
+        # Entrada HDMI
+        "hdmi1":   {"capability": "samsungvd.mediaInputSource", "command": "setInputSource", "args": ["HDMI1"]},
+        "hdmi2":   {"capability": "samsungvd.mediaInputSource", "command": "setInputSource", "args": ["HDMI2"]},
+        "hdmi3":   {"capability": "samsungvd.mediaInputSource", "command": "setInputSource", "args": ["HDMI3"]},
     }
     
-    if action.lower() not in commands:
-        return {"success": False, "error": f"Acción '{action}' no válida. Usa 'on', 'off', 'up', 'down', 'mute', 'unmute'"}
+    if action.lower() not in command_map:
+        return {"success": False, "error": f"Acción '{action}' no válida. Usa: {', '.join(command_map)}"}
     
+    cap = command_map[action.lower()]
+    payload = {
+        "commands": [
+            {
+                "component": "main",
+                "capability": cap["capability"],
+                "command": cap["command"],
+                **({"arguments": cap["args"]} if cap["args"] else {}),
+            }
+        ]
+    }
+
     try:
         response = requests.post(
             f"{BASE_URL}/devices/{device_id}/commands",
             headers=get_headers(),
-            json=commands[action.lower()]
+            json=payload
         )
         
         if response.status_code in [200, 202]:
@@ -155,7 +137,15 @@ def tv_control(action: str, device_name: str = None):
                 "up": "subido volumen",
                 "down": "bajado volumen",
                 "mute": "silenciado",
-                "unmute": "dessilenciado"
+                "unmute": "dessilenciado",
+                "ok": "botón OK presionado",
+                "back": "botón ATRÁS presionado",
+                "home": "botón HOME presionado",
+                "menu": "botón MENÚ presionado",
+                "source": "botón SOURCE presionado",
+                "hdmi1": "cambiado a HDMI 1",
+                "hdmi2": "cambiado a HDMI 2",
+                "hdmi3": "cambiado a HDMI 3",
             }
             return {
                 "success": True,

@@ -80,7 +80,8 @@ SYSTEM_PROMPT = os.getenv(
     "7. Cuando el usuario mencione datos importantes sobre sí mismo, usa remember_fact.\n"
     "8. Sé conciso. No generes menús de opciones innecesarios.\n"
     "9. Para anotar entrenamientos línea por línea: usa gym_start_session, gym_add_exercise, gym_end_session.\n"
-    "10. Para guardar un entrenamiento completo en un solo mensaje: usa gym_save_workout con ejercicios_raw.",
+    "10. Para guardar un entrenamiento completo en un solo mensaje: usa gym_save_workout con ejercicios_raw.\n"
+    "11. Cuando el usuario mencione apagar, encender, o cambiar el volumen o HDMI del TV/televisor, usa SIEMPRE samsung_tv_control.",
 )
 
 logger = logging.getLogger("miniclaw")
@@ -141,6 +142,10 @@ TOOL_CATEGORIES = {
     "notes": {
         "keywords": ["nota", "notas", "note", "apunte", "guardar nota", "buscar nota"],
         "tools": {"note_save", "note_list", "note_search", "note_delete"},
+    },
+    "tv": {
+        "keywords": ["tv", "tele", "televisor", "volumen", "enciende", "apaga", "apágalo", "enciéndelo", "silencia", "samsung", "hdmi", "fuente", "source", "ok", "home", "menú"],
+        "tools": {"samsung_list_devices", "samsung_tv_status", "samsung_tv_control"},
     },
 }
 

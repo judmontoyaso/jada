@@ -62,7 +62,7 @@ class DeepThinkAgent:
                 model=THINKING_MODEL,
                 messages=messages,
                 temperature=0.4,
-                max_tokens=1096,
+                max_tokens=10096,
             )
 
             result = response.choices[0].message.content or ""
