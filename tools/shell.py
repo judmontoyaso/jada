@@ -55,11 +55,15 @@ async def run_command(command: str, timeout: int = 30, user: str = "unknown") ->
                 "blocked": True,
             }
     
-    # 3. Verificar comandos bloqueados (como inicio de palabra)
+    # 3. Verificar comandos bloqueados
     cmd_lower = command.lower().strip()
     words = cmd_lower.split()
+    
     for blocked in BLOCKED_COMMANDS:
-        if blocked in words:
+        blocked_clean = blocked.strip().lower()
+        # Verificar tanto frases completas como palabras individuales
+        if (blocked_clean in cmd_lower or  # "rm -rf" en comando completo
+            blocked_clean in words):        # "rm" como palabra individual
             return {
                 "stdout": "",
                 "stderr": f"❌ Comando bloqueado: '{blocked}'",
