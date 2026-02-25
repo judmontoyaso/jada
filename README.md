@@ -202,7 +202,7 @@ MATRIX_PASSWORD=tu-password
 MATRIX_ROOM_IDS=              # vacío = escuchar en todos los rooms
 
 # MongoDB (gym tracker)
-MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/db?retryWrites=true&w=majority
+MONGO_URI=mongodb://[tu-uri-de-conexion-aqui]
 MONGO_DB=n8n_memoria
 MONGO_GYM_COLLECTION=gimnasio
 

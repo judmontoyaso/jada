@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 MONGO_URI = os.getenv(
     "MONGO_URI",
-    "mongodb+srv://dbbot:juan0521@cluster0.yrat3g7.mongodb.net/n8n_memoria?retryWrites=true&w=majority",
+    "mongodb://localhost:27017/n8n_memoria",
 )
 MONGO_DB = os.getenv("MONGO_DB", "n8n_memoria")
 MONGO_COLLECTION = os.getenv("MONGO_GYM_COLLECTION", "gimnasio")
