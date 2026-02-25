@@ -10,23 +10,20 @@ MiniClaw es un asistente de IA con acceso a comandos del sistema. Esta documento
 
 | Medida | Descripción |
 |--------|-------------|
-| Whitelist de comandos | Solo comandos específicos NO peligrosos |
-| Bloqueo por patrones | Detecta `;`, `|`, `$()`, `>` y otros shell metacharacters |
+| **Whitelist de comandos** | ✅ Solo comandos en SAFE_COMMANDS se permiten |
+| Bloqueo por patrones | Detecta path traversal, redirects peligrosos, command substitution |
 | Límite de entrada | Máx 10,000 caracteres por comando |
 | Timeout | 30 segundos máximo por comando |
 | Output limitado | 50KB stdout, 5KB stderr |
 | Seshell restringida | `/bin/bash` con límites |
 
-**Comandos bloqueados:**
-- `rm -rf` (eliminación recursiva)
-- `format` (formatear discos)
-- `del /f` (forzar delete Windows)
-- `shutdown`/`reboot` (apagar sistema)
-- `mkfs` (crear filesystem)
-- `chmod 777` (permisos inseguros)
-- `chown` (cambiar propietario)
-- `sudo su` (escalación de privilegios)
-- `passwd` (cambiar contraseñas)
+**Comandos seguros (whitelist):**
+- `echo`, `ls`, `pwd`, `cat`, `head`, `tail`
+- `grep`, `find`, `wc`, `uniq`, `sort`, `tr`, `cut`, `awk`, `sed`
+- `date`, `whoami`
+
+**Comandos bloqueados (fallback):**
+- `rm -rf`, `format`, `del /f`, `shutdown`, `mkfs`, `chmod 777`, `chown`, `sudo su`, `passwd`
 
 ### 2. Rate Limiting
 

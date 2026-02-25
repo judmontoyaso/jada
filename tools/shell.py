@@ -1,5 +1,5 @@
 """
-tools/shell.py — Ejecutar comandos del sistema de forma segura
+tools/shell.py — Ejecutar comandos del sistema de forma segura (WHITELIST MODE)
 """
 import asyncio
 import os
@@ -8,25 +8,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Comandos peligrosos que están bloqueados
-_RAW_BLOCKED = os.getenv(
-    "BLOCKED_COMMANDS", 
-    "rm -rf,format,del /f,shutdown,mkfs,chmod 777,chown,sudo su,passwd"
+# Whitelist de comandos seguros (solo estos se permiten)
+_SAFE_COMMANDS = os.getenv(
+    "SAFE_COMMANDS",
+    "echo,ls,pwd,cat,head,tail,grep,find,date,whoami,wc,uniq,sort,tr,cut,awk,sed"
 )
-BLOCKED_COMMANDS = [c.strip().lower() for c in _RAW_BLOCKED.split(",") if c.strip()]
+SAFE_COMMANDS = [c.strip().lower() for c in _SAFE_COMMANDS.split(",") if c.strip()]
 
-# Patrones peligrosos adicionales (regex)
-DANGEROUS_PATTERNS = [
-    r'[;&|`$]',  # Shell metacharacters
+# Comandos que siempre están bloqueados (fallback de seguridad)
+BLOCKED_COMMANDS = [
+    "rm -rf", "format", "del /f", "shutdown", "mkfs",
+    "chmod 777", "chown", "sudo su", "passwd", "wget", "curl"
+]
+
+# Patrones peligrosos que siempre se bloquean
+CRITICAL_PATTERNS = [
     r'\.\.\/',   # Path traversal
-    r'\>\s*\>',  # Redirects peligrosos
+    r'\>\s*\>',  # Redirect overwrite
     r'\$\(',     # Command substitution
 ]
 
 
 async def run_command(command: str, timeout: int = 30, user: str = "unknown") -> dict:
     """
-    Ejecuta un comando de shell de forma segura.
+    Ejecuta un comando de shell de forma segura (WHITELIST MODE).
+    
+    Solo permite comandos en SAFE_COMMANDS. Todos los demás son bloqueados.
     
     Args:
         command: Comando a ejecutar
@@ -45,31 +52,48 @@ async def run_command(command: str, timeout: int = 30, user: str = "unknown") ->
             "blocked": True,
         }
     
-    # 2. Verificar patrones peligrosos (regex)
-    for pattern in DANGEROUS_PATTERNS:
+    # 2. Verificar patrones críticos (siempre bloqueados)
+    for pattern in CRITICAL_PATTERNS:
         if re.search(pattern, command):
             return {
                 "stdout": "",
-                "stderr": f"❌ Patrón peligroso detectado: '{pattern}'",
+                "stderr": f"❌ Patrón crítico bloqueado: '{pattern}'",
                 "returncode": -1,
                 "blocked": True,
             }
     
-    # 3. Verificar comandos bloqueados
+    # 3. Verificar si es un comando seguro (WHITELIST)
     cmd_lower = command.lower().strip()
     words = cmd_lower.split()
     
-    for blocked in BLOCKED_COMMANDS:
-        blocked_clean = blocked.strip().lower()
-        # Verificar tanto frases completas como palabras individuales
-        if (blocked_clean in cmd_lower or  # "rm -rf" en comando completo
-            blocked_clean in words):        # "rm" como palabra individual
+    # El primer comando debe estar en la whitelist
+    if not words:
+        return {
+            "stdout": "",
+            "stderr": "❌ Comando vacío",
+            "returncode": -1,
+            "blocked": True,
+        }
+    
+    first_cmd = words[0]
+    
+    # Verificar contra whitelist
+    if first_cmd not in SAFE_COMMANDS:
+        # Verificar también contra blocked commands (fallback)
+        is_blocked = any(blocked in cmd_lower for blocked in BLOCKED_COMMANDS)
+        if is_blocked:
             return {
                 "stdout": "",
-                "stderr": f"❌ Comando bloqueado: '{blocked}'",
+                "stderr": f"❌ Comando bloqueado por seguridad: '{first_cmd}'",
                 "returncode": -1,
                 "blocked": True,
             }
+        return {
+            "stdout": "",
+            "stderr": f"❌ Comando no permitido: '{first_cmd}'. Comandos seguros: {', '.join(SAFE_COMMANDS)}",
+            "returncode": -1,
+            "blocked": True,
+        }
     
     # 4. Verificar si usuario está bloqueado
     blocked_users = os.getenv("BLOCKED_USERS", "").split(",")
@@ -89,16 +113,16 @@ async def run_command(command: str, timeout: int = 30, user: str = "unknown") ->
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 shell=True,
-                limit=1024 * 1024,  # 1MB max output
+                limit=1024 * 1024,
             )
         else:
-            # En Unix, usar bash con comando limitado
+            # En Unix, usar bash
             proc = await asyncio.create_subprocess_shell(
-                f"exec {command}",
+                command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 executable="/bin/bash",
-                limit=1024 * 1024,  # 1MB max output
+                limit=1024 * 1024,
             )
 
         stdout, stderr = await asyncio.wait_for(
@@ -106,7 +130,7 @@ async def run_command(command: str, timeout: int = 30, user: str = "unknown") ->
         )
 
         return {
-            "stdout": stdout.decode("utf-8", errors="replace").strip()[:50000],  # Limitar output
+            "stdout": stdout.decode("utf-8", errors="replace").strip()[:50000],
             "stderr": stderr.decode("utf-8", errors="replace").strip()[:5000],
             "returncode": proc.returncode,
             "blocked": False,
