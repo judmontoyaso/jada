@@ -36,8 +36,8 @@
 | ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |
 | ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |### FASE 5: Git y Documentación
 | ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |- [ ] 5.1 Commit de cambios incrementales
-| ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |- [ ] 5.2 Escribir tests unitarios
-| ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |- [ ] 5.3 Actualizar README.md con nueva funcionalidad
+| ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |- [x] 5.2 Escribir tests unitarios
+| ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |- [x] 5.3 Actualizar README.md con nueva funcionalidad
 | ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |- [ ] 5.4 Crear Pull Request
 | ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |
 | ✅ 1.1 Crear rama | Completada | MiniMax-M2.1 | Alta |---
