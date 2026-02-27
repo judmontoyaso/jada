@@ -34,6 +34,7 @@ Jada es un agente de IA personal que vive en Matrix. Tiene humor negro, es direc
 |------|-----------|
 | Interfaz | Matrix (matrix-nio) |
 | LLM | NVIDIA NIM — Kimi K2 Thinking |
+| LLM Client | **Agno** (`agno.models.nvidia`) — failover automático |
 | Memoria | SQLite (historial) + MongoDB (gym) |
 | Scheduler | croniter + asyncio |
 | Dashboard | Next.js 16 + TypeScript |
