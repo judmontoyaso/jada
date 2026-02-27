@@ -4,6 +4,7 @@ agent/tools.py — Registro central de herramientas y dispatcher (Agno-style)
 Los schemas se definen de forma compacta con el helper _fn() que genera
 automáticamente el format OpenAI/NIM. Reduce ~60% el boilerplate.
 """
+import asyncio
 import json
 from tools.shell import run_command
 from tools.files import read_file, write_file, list_dir
@@ -19,6 +20,7 @@ from tools.summarizer import fetch_and_summarize
 from tools.reminders import reminder_manager
 from tools.deep_think import deep_think
 from tools.samsung_tv import tv_control, tv_status, list_devices
+from agent.scheduler import get_scheduler
 
 
 # ─── Helper: genera schema NIM desde definición compacta ─────────────────────
@@ -285,6 +287,38 @@ TOOL_SCHEMAS = [
         "Guarda un hecho importante sobre el usuario en la memoria a largo plazo.",
         {"fact": ("string", "Hecho a recordar sobre el usuario")},
         required=["fact"]),
+
+    # ── Cronjobs (tareas programadas del agente) ───────────────────────────────────
+    _fn("cronjob_create",
+        ("Crea una tarea programada para el agente. El agente ejecutará el 'prompt' "
+         "automáticamente según la expresión cron. Ejemplo: '0 8 * * *' = cada día a las 8am."),
+        {"name": ("string", "Nombre de la tarea (ej: 'Noticias mañaneras')"),
+         "cron_expr": ("string", "Expresión cron: '* * * * *' = minuto hora día mes dia_semana"),
+         "prompt": ("string", "Qué debe hacer el agente cuando se ejecute la tarea"),
+         "description": ("string", "Descripción opcional de la tarea"),
+         "timezone": ("string", "Timezone (default: UTC, ej: America/Bogota)")},
+        required=["name", "cron_expr", "prompt"]),
+
+    _fn_empty("cronjob_list", "Lista todas las tareas programadas del agente."),
+
+    _fn("cronjob_delete",
+        "Elimina una tarea programada por su ID.",
+        {"job_id": ("string", "ID de la tarea a eliminar")},
+        required=["job_id"]),
+
+    _fn("cronjob_update",
+        "Actualiza una tarea programada (puede cambiar nombre, expresión cron, prompt o estado).",
+        {"job_id": ("string", "ID de la tarea"),
+         "name": ("string", "Nuevo nombre"),
+         "cron_expr": ("string", "Nueva expresión cron"),
+         "prompt": ("string", "Nuevo prompt"),
+         "enabled": ("boolean", "true para activar, false para pausar")},
+        required=["job_id"]),
+
+    _fn("cronjob_run_now",
+        "Ejecuta una tarea programada inmediatamente (independiente del horario).",
+        {"job_id": ("string", "ID de la tarea a ejecutar ahora")},
+        required=["job_id"]),
 ]
 
 
@@ -484,6 +518,55 @@ class ToolDispatcher:
                 if self._memory and self._user_id:
                     await self._memory.save_fact(self._user_id, args["fact"])
                 return {"success": True, "fact_saved": args["fact"]}
+
+            # Cronjobs — tareas programadas del agente
+            case "cronjob_create":
+                sched = get_scheduler()
+                if not sched:
+                    return {"error": "Scheduler no inicializado. Reinicia Jada."}
+                import time as _time
+                job_id = f"cron-{int(_time.time())}"
+                job = sched.add_job(
+                    job_id=job_id,
+                    name=args["name"],
+                    cron_expr=args["cron_expr"],
+                    prompt=args["prompt"],
+                    room_id=self._room_id or "unknown",
+                    description=args.get("description", ""),
+                    timezone_str=args.get("timezone", "UTC"),
+                )
+                return {"success": True, "job": job, "message": f"✅ Tarea '{args['name']}' creada con ID {job_id}"}
+
+            case "cronjob_list":
+                sched = get_scheduler()
+                if not sched:
+                    return {"error": "Scheduler no inicializado."}
+                return {"jobs": sched.list_jobs(), "status": sched.get_status()}
+
+            case "cronjob_delete":
+                sched = get_scheduler()
+                if not sched:
+                    return {"error": "Scheduler no inicializado."}
+                deleted = sched.delete_job(args["job_id"])
+                return {"success": deleted, "message": f"Tarea {'eliminada' if deleted else 'no encontrada'}"}
+
+            case "cronjob_update":
+                sched = get_scheduler()
+                if not sched:
+                    return {"error": "Scheduler no inicializado."}
+                update_args = {k: v for k, v in args.items() if k != "job_id"}
+                updated = sched.update_job(args["job_id"], **update_args)
+                return {"success": bool(updated), "job": updated}
+
+            case "cronjob_run_now":
+                sched = get_scheduler()
+                if not sched:
+                    return {"error": "Scheduler no inicializado."}
+                job = sched.get_job(args["job_id"])
+                if not job:
+                    return {"error": f"Tarea '{args['job_id']}' no encontrada"}
+                asyncio.create_task(sched._execute_job(job))
+                return {"success": True, "message": f"⏰ Tarea '{job['name']}' ejecutándose ahora"}
 
             case _:
                 return {"error": f"Tool desconocida: '{tool_name}'"}

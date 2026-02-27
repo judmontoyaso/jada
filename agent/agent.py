@@ -94,6 +94,9 @@ audit_logger = logging.getLogger("jada.audit")
 # Tools que siempre se envían (core, ligeras)
 CORE_TOOLS = {"remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think"}
 
+# ID de usuario ficticio para mensajes del scheduler
+SCHEDULER_USER_ID = "@scheduler:jada"
+
 # Categorías opcionales — se activan si el mensaje matchea
 TOOL_CATEGORIES = {
     "gym": {
@@ -147,6 +150,12 @@ TOOL_CATEGORIES = {
         "keywords": ["tv", "tele", "televisor", "volumen", "enciende", "apaga", "apágalo", "enciéndelo", "silencia", "samsung", "hdmi", "fuente", "source", "ok", "home", "menú"],
         "tools": {"samsung_list_devices", "samsung_tv_status", "samsung_tv_control"},
     },
+    "cronjobs": {
+        "keywords": ["cron", "cronjob", "tarea programada", "programa", "schedulea", "crear tarea",
+                      "cada día", "cada semana", "cada hora", "automatiza", "automatizar",
+                      "listar tareas", "mis tareas", "borra tarea", "eliminar tarea"],
+        "tools": {"cronjob_create", "cronjob_list", "cronjob_delete", "cronjob_update", "cronjob_run_now"},
+    },
 }
 
 
@@ -183,6 +192,26 @@ class Agent:
 
     async def init(self):
         await self.memory.init()
+
+    async def run_scheduled(self, prompt: str, room_id: str) -> None:
+        """
+        Punto de entrada para el scheduler: ejecuta un prompt como si fuera
+        un mensaje del usuario desde Matrix.
+        Usa un user_id especial para identificar mensajes automáticos.
+        """
+        logger.info(f"⏰ Ejecutando tarea programada en room {room_id}: '{prompt[:80]}...'")
+        try:
+            response = await self.chat(prompt, SCHEDULER_USER_ID, room_id)
+            # La respuesta se guarda en memoria — el bot la enviará al room
+            # via el callback que inyecta matrix/client.py
+            if hasattr(self, '_send_callback') and self._send_callback:
+                await self._send_callback(room_id, response)
+        except Exception as e:
+            logger.error(f"❌ Error en tarea programada: {e}")
+
+    def set_send_callback(self, callback) -> None:
+        """Inyecta el callback para enviar mensajes al room de Matrix."""
+        self._send_callback = callback
 
     async def chat(self, user_message: str, user_id: str, room_id: str) -> str:
         """

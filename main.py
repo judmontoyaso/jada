@@ -72,6 +72,14 @@ async def main():
 
     # Iniciar bot de Matrix
     bot = MatrixBot(agent)
+
+    # Inyectar callback de envío de mensajes al agente (para el scheduler)
+    from agent.scheduler import init_scheduler
+    scheduler = init_scheduler(agent.run_scheduled)
+    agent.set_send_callback(bot.send_message)
+    await scheduler.start()
+    logger.info("✅ Scheduler de tareas programadas iniciado")
+
     await bot.start()
 
 

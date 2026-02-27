@@ -208,6 +208,10 @@ class MatrixBot:
         logger.info(f"📩 Invitación a room {room.room_id}, aceptando...")
         await self.client.join(room.room_id)
 
+    async def send_message(self, room_id: str, text: str):
+        """Alias público de _send para uso externo (scheduler, tests)."""
+        await self._send(room_id, text)
+
     async def _send(self, room_id: str, text: str):
         """Enviar un mensaje de texto al room. Divide mensajes largos en chunks."""
         if len(text) <= MAX_MSG_LENGTH:
