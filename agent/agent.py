@@ -92,7 +92,11 @@ audit_logger = logging.getLogger("jada.audit")
 # Esto reduce el payload y evita 504 Gateway Timeouts en NVIDIA NIM.
 
 # Tools que siempre se envían (core, ligeras)
-CORE_TOOLS = {"remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think", "cronjob_list", "cronjob_create"}
+CORE_TOOLS = {
+    "remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think",
+    # Cronjobs SIEMPRE disponibles — usar SOLO estas tools para gestionar tareas, NUNCA curl/run_command
+    "cronjob_list", "cronjob_create", "cronjob_delete", "cronjob_update", "cronjob_run_now",
+}
 
 # ID de usuario ficticio para mensajes del scheduler
 SCHEDULER_USER_ID = "@scheduler:jada"

@@ -300,25 +300,35 @@ TOOL_SCHEMAS = [
          "timezone": ("string", "Timezone (default: UTC, ej: America/Bogota)")},
         required=["name", "cron_expr", "prompt"]),
 
-    _fn_empty("cronjob_list", "Lista todas las tareas programadas del agente."),
+    _fn_empty("cronjob_list",
+        ("Lista todas las tareas programadas del agente. "
+         "USA ESTO PRIMERO para obtener el job_id antes de eliminar, pausar o modificar cualquier tarea.")),
 
     _fn("cronjob_delete",
-        "Elimina una tarea programada por su ID.",
-        {"job_id": ("string", "ID de la tarea a eliminar")},
+        ("Elimina permanentemente una tarea programada. "
+         "FLUJO CORRECTO: 1) llama cronjob_list para obtener el job_id, "
+         "2) llama cronjob_delete con ese job_id. "
+         "NUNCA uses run_command ni curl para esto."),
+        {"job_id": ("string", "ID exacto de la tarea, obtenido de cronjob_list (ej: 'cron-1234567890')")},
         required=["job_id"]),
 
     _fn("cronjob_update",
-        "Actualiza una tarea programada (puede cambiar nombre, expresión cron, prompt o estado).",
-        {"job_id": ("string", "ID de la tarea"),
-         "name": ("string", "Nuevo nombre"),
-         "cron_expr": ("string", "Nueva expresión cron"),
-         "prompt": ("string", "Nuevo prompt"),
-         "enabled": ("boolean", "true para activar, false para pausar")},
+        ("Actualiza una tarea programada: cambia nombre, cron, prompt, o activa/pausa. "
+         "FLUJO CORRECTO: 1) llama cronjob_list para obtener el job_id, "
+         "2) llama cronjob_update con ese job_id y los campos a cambiar. "
+         "Para pausar una tarea usa enabled=false. Para reactivar usa enabled=true."),
+        {"job_id": ("string", "ID de la tarea, obtenido de cronjob_list"),
+         "name": ("string", "Nuevo nombre (opcional)"),
+         "cron_expr": ("string", "Nueva expresión cron (opcional)"),
+         "prompt": ("string", "Nuevo prompt (opcional)"),
+         "enabled": ("boolean", "true=activar, false=pausar (opcional)")},
         required=["job_id"]),
 
     _fn("cronjob_run_now",
-        "Ejecuta una tarea programada inmediatamente (independiente del horario).",
-        {"job_id": ("string", "ID de la tarea a ejecutar ahora")},
+        ("Ejecuta una tarea programada ahora mismo, sin esperar su próxima ejecución. "
+         "FLUJO CORRECTO: 1) llama cronjob_list para obtener el job_id, "
+         "2) llama cronjob_run_now con ese job_id."),
+        {"job_id": ("string", "ID de la tarea a ejecutar ahora, obtenido de cronjob_list")},
         required=["job_id"]),
 ]
 
