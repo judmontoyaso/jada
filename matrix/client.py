@@ -277,7 +277,7 @@ class MatrixBot:
     async def _set_typing(self, room_id: str, typing: bool, timeout: int = 30000):
         """Enviar indicador de escritura ('escribiendo...') al room."""
         try:
-            await self.client.room_typing(room_id, typing=typing, timeout=timeout)
+            await self.client.room_typing(room_id, typing_state=typing, timeout=timeout)
         except Exception as e:
             logger.debug(f"No se pudo enviar typing indicator: {e}")
 
