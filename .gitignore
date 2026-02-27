@@ -42,6 +42,7 @@ cronjobs.json
 
 # Caché del scheduler / matrix session
 sync_token.json
+token.json
 client_store/
 crypto_store/
 session.json
@@ -74,3 +75,5 @@ tmp/
 node_modules/
 .next/
 .env.local
+
+credentials.json

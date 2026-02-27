@@ -15,11 +15,12 @@ from tools.notes import NotesDB
 from tools.gym_parser import parse_workout_text
 from tools.email_reader import list_emails, read_email, search_emails
 from tools.email_sender import send_email
-from tools.calendar_reader import get_today_events, get_upcoming_events, search_events
+from tools.calendar_api import get_today_events, get_upcoming_events, add_event
 from tools.summarizer import fetch_and_summarize
 from tools.reminders import reminder_manager
 from tools.deep_think import deep_think
 from tools.samsung_tv import tv_control, tv_status, list_devices
+from tools.weather import get_weather
 from agent.scheduler import get_scheduler
 
 
@@ -96,10 +97,15 @@ TOOL_SCHEMAS = [
 
     # ── Web ────────────────────────────────────────────────────────────────────
     _fn("web_search",
-        "Busca información en la web usando DuckDuckGo. Retorna títulos, URLs y snippets.",
-        {"query": ("string", "Consulta de búsqueda"),
-         "max_results": ("integer", "Número máximo de resultados (default: 5)")},
-        required=["query"]),
+        "Busca información en la web usando DuckDuckGo o Google News. Retorna títulos, URLs y snippets.",
+        {"query": ("string", "Consulta de búsqueda (Si es noticias, usa SOLO palabras clave como 'Colombia' o 'Tecnología', SIN fechas ni palabras como 'hoy')"),
+         "max_results": ("integer", "Número máximo de resultados (default: 5)"),
+         "search_type": ("string", "Tipo de búsqueda: 'text' o 'news'")},
+        required=["query", "search_type"]),
+
+    _fn("get_weather",
+        "Obtiene el clima actual, temperatura y posibilidad de lluvia de una ciudad.",
+        {"location": ("string", "Nombre de la ciudad (default: Medellin)")}),
 
     # ── Browser ────────────────────────────────────────────────────────────────
     _fn("browser_navigate",
@@ -212,7 +218,7 @@ TOOL_SCHEMAS = [
 
     _fn("note_delete",
         "Elimina una nota por su ID.",
-        {"note_id": ("integer", "ID de la nota a eliminar")},
+        {"note_id": ("string", "ID de la nota a eliminar")},
         required=["note_id"]),
 
     # ── Email ──────────────────────────────────────────────────────────────────
@@ -249,11 +255,13 @@ TOOL_SCHEMAS = [
         {"days": ("integer", "Días hacia adelante (default: 7)"),
          "limit": ("integer", "Máximo de eventos (default: 15)")}),
 
-    _fn("calendar_search",
-        "Busca eventos en el calendario por título, descripción o ubicación.",
-        {"query": ("string", "Texto a buscar"),
-         "limit": ("integer", "Máximo de resultados")},
-        required=["query"]),
+    _fn("calendar_add_event",
+        "Agenda un NUEVO evento o reunión en el calendario de Google del usuario.",
+        {"title": ("string", "Título del evento o reunión"),
+         "start_datetime": ("string", "Fecha y hora de inicio (Formato ISO 8601, ej: '2026-02-28T14:00:00')"),
+         "end_datetime": ("string", "Fecha y hora de fin (Formato ISO 8601, ej: '2026-02-28T15:00:00')"),
+         "description": ("string", "Descripción opcional del evento (sin usar si no lo mencionan)")},
+        required=["title", "start_datetime", "end_datetime"]),
 
     # ── Summarizer ─────────────────────────────────────────────────────────────
     _fn("summarize_url",
@@ -384,7 +392,9 @@ class ToolDispatcher:
 
             # Web
             case "web_search":
-                return await search(args["query"], args.get("max_results", 5))
+                return await search(args["query"], args.get("max_results", 5), args.get("search_type", "text"))
+            case "get_weather":
+                return get_weather(args.get("location", "Medellin"))
 
             # Browser
             case "browser_navigate":
@@ -507,8 +517,10 @@ class ToolDispatcher:
                 return await get_today_events()
             case "calendar_upcoming":
                 return await get_upcoming_events(args.get("days", 7), args.get("limit", 15))
-            case "calendar_search":
-                return await search_events(args["query"], args.get("limit", 10))
+            case "calendar_add_event":
+                return await add_event(
+                    args["title"], args["start_datetime"], args["end_datetime"], args.get("description", "")
+                )
 
             # Summarizer
             case "summarize_url":

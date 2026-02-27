@@ -71,10 +71,18 @@ SYSTEM_PROMPT = os.getenv(
     "luego cronjob_delete / cronjob_update / cronjob_run_now con ese id. "
     "NUNCA uses curl ni run_command para gestionar cronjobs.\n"
     "6. Para gym: gym_save_workout con el texto EXACTO del usuario en 'ejercicios_raw'.\n"
-    "7. Para web: web_search. No inventes información.\n"
-    "8. Responde en el idioma del usuario.\n"
-    "9. Sé conciso. Respuestas cortas cuando sea posible.\n"
-    "10. Para TV: samsung_tv_control.\n"
+    "8. Para enviar emails: usa email_send.\n"
+    "9. Para noticias: SIEMPRE usa web_search con una query relevante. NUNCA inventes URLs ni resultados genéricos. Si no sabes, dinos: 'No encontré'.\n"
+    "10. Para clima o temperatura: usa get_weather.\n"
+    "11. Para agendar reuniones o eventos en Google Calendar: Pide título y hora (ej: 'Reunión de equipo a las 3pm'), luego calcula la fecha/hora en ISO 8601 basado en la hora local y SIEMPRE usa calendar_add_event. No asumas éxito sin el JSON.\n"
+    "-----------\n"
+    "== REGLA DE TOLERANCIA CERO A ALUCINACIONES DE ACCIONES ==\n"
+    "NUNCA bajo NINGUNA circunstancia afirmes haber realizado una acción si no llamaste a la herramienta correspondiente y recibiste un JSON de éxito.\n"
+    "Si la herramienta falla, di que falló. Si no tienes la herramienta en tu lista actual, di que no puedes hacerlo. NUNCA TE INVENTES RESULTADOS EXISTOSOS (ej: 'Evento agregado al calendario') SI NO HAS USADO LA TOOL.\n"
+    "-----------\n"
+    "12. Responde en el idioma del usuario.\n"
+    "13. Sé conciso. Respuestas cortas cuando sea posible.\n"
+    "14. Para TV: samsung_tv_control.\n"
     "PROHIBIDO ABSOLUTO:\n"
     "- Terminar mensajes con '¿Algo más?', '¿Hay algo más en que pueda ayudarte?' o variantes. Nunca.\n"
     "- Decir 'no tengo acceso' a una herramienta que aparece en tu lista.\n"
@@ -134,10 +142,9 @@ TOOL_CATEGORIES = {
         "tools": {"email_list", "email_read", "email_search", "email_send"},
     },
     "calendar": {
-        "keywords": ["calendario", "calendar", "evento", "agenda", "cita", "reunión",
-                      "meeting", "schedule", "programado", "hoy tengo", "mañana tengo",
-                      "semana", "próximos eventos"],
-        "tools": {"calendar_today", "calendar_upcoming", "calendar_search"},
+        "keywords": ["calendario", "evento", "eventos", "hoy", "agenda", "agendar", "cita", "reunión", "reunion",
+                      "semana", "próximos eventos", "prueba technique", "prueba técnica"],
+        "tools": {"calendar_today", "calendar_upcoming", "calendar_add_event"},
     },
     "browser": {
         "keywords": ["browser", "navega", "abre", "página", "web", "url", "http",
@@ -160,6 +167,10 @@ TOOL_CATEGORIES = {
     "notes": {
         "keywords": ["nota", "notas", "note", "apunte", "guardar nota", "buscar nota"],
         "tools": {"note_save", "note_list", "note_search", "note_delete"},
+    },
+    "weather": {
+        "keywords": ["clima", "tiempo", "temperatura", "lloverá", "lluvia", "grados", "weather", "sol", "pronóstico"],
+        "tools": {"get_weather"},
     },
     "tv": {
         "keywords": ["tv", "tele", "televisor", "volumen", "enciende", "apaga", "apágalo", "enciéndelo", "silencia", "samsung", "hdmi", "fuente", "source", "ok", "home", "menú"],
@@ -194,12 +205,18 @@ TOOL_CATEGORIES = {
 }
 
 
-def _select_tools(message: str) -> list[dict]:
+def _select_tools(message: str, history: list[dict] = None) -> list[dict]:
     """
-    Selecciona solo las tools relevantes según el mensaje del usuario.
+    Selecciona solo las tools relevantes según el mensaje del usuario
+    Y los últimos mensajes del historial (para mantener contexto en follow-ups).
     Siempre incluye las tools core + categorías que matchean por keywords.
     """
     msg_lower = message.lower()
+
+    # También analizar últimos 6 mensajes del historial para contexto
+    if history:
+        recent_texts = [m.get("content", "") or "" for m in history[-6:] if m.get("role") in ("user", "assistant")]
+        msg_lower = msg_lower + " " + " ".join(t.lower() for t in recent_texts)
 
     active_tool_names = set(CORE_TOOLS)
 
@@ -313,7 +330,7 @@ class Agent:
         self._dispatcher.set_context(user_id=user_id, room_id=room_id)
 
         # 6. Seleccionar tools relevantes según el mensaje
-        tools = _select_tools(user_message)
+        tools = _select_tools(user_message, history)
 
         # 7. Loop ReAct — envuelto en try/except para que una falla del LLM
         #    no deje mensajes huérfanos en el historial

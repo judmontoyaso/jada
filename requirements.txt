@@ -8,7 +8,10 @@ python-dotenv>=1.0.0
 aiosqlite>=0.19.0
 Pillow>=10.0.0
 pymongo[srv]>=4.0.0
-schedule>=1.2.0
+APScheduler==3.10.4
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
 croniter>=2.0.0
 pytz>=2024.1
 chromadb>=0.5.0
