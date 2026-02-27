@@ -98,7 +98,7 @@ def print_banner(live_logs: bool = False) -> None:
   {DIM}Version:{RESET}  {YELLOW}{VERSION}{RESET}
   {DIM}Model:{RESET}    {GREEN}{os.getenv("NVIDIA_MODEL", "N/A")}{RESET}
   {DIM}Matrix:{RESET}   {GREEN}{os.getenv("MATRIX_HOMESERVER", "N/A")}{RESET}
-  {DIM}Dashboard:{RESET} {GREEN}http://localhost:8080{RESET}
+  {DIM}Dashboard:{RESET} {GREEN}http://localhost:3000{RESET}
   {DIM}Modo:{RESET}     {mode_label}
 """
     print(banner)
@@ -121,10 +121,27 @@ async def main(live_logs: bool = False) -> None:
 
     # Inicializar y arrancar scheduler
     from agent.scheduler import init_scheduler
+    from agent.heartbeat import run_heartbeat, _parse_heartbeat_config
     scheduler = init_scheduler(agent.run_scheduled)
     agent.set_send_callback(bot.send_message)
+    scheduler.set_agent(agent)   # ← heartbeat necesita llm + send_callback
     await scheduler.start()
     logger.info("✅ Scheduler de tareas programadas iniciado")
+
+    # Registrar heartbeat como tarea programada
+    hb_config = _parse_heartbeat_config()
+    if hb_config["enabled"]:
+        hb_room = hb_config["room_id"] or (list(scheduler.list_jobs())[0].get("room_id", "") if scheduler.list_jobs() else "")
+        existing_hb = [j for j in scheduler.list_jobs() if j.get("name") == "__heartbeat__"]
+        if not existing_hb:
+            scheduler.add_job(
+                job_id="__heartbeat__",
+                name="__heartbeat__",
+                cron_expr=hb_config["cron_expr"],
+                prompt="__heartbeat__",  # señal especial
+                room_id=hb_room,
+            )
+        logger.info(f"💓 Heartbeat registrado (cron={hb_config['cron_expr']}, prob={hb_config['speak_probability']}%)")
 
     await bot.start()
 

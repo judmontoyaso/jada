@@ -44,6 +44,8 @@ class JadaScheduler:
                             Firma: async def run_scheduled(prompt: str, room_id: str) -> None
         """
         self._callback = agent_callback
+        self._agent = None  # seét via set_agent() desde main.py
+        self._send_callback = None  # para mensajes directos (heartbeat)
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._jobs: Dict[str, dict] = {}
@@ -75,6 +77,11 @@ class JadaScheduler:
             logger.error(f"Error guardando cronjobs: {e}")
 
     # ─── API pública ─────────────────────────────────────────────────────────
+
+    def set_agent(self, agent) -> None:
+        """Inyecta referencia al agente (necesaria para heartbeat)."""
+        self._agent = agent
+        self._send_callback = getattr(agent, '_send_callback', None)
 
     def add_job(
         self,
@@ -256,7 +263,13 @@ class JadaScheduler:
 
         # Llamar al agente
         try:
-            await self._callback(prompt, room_id)
+            if prompt == "__heartbeat__":
+                from agent.heartbeat import run_heartbeat
+                llm = getattr(self._agent, 'llm', None)
+                send_cb = getattr(self._agent, '_send_callback', None)
+                await run_heartbeat(llm=llm, send_callback=send_cb, room_id=room_id)
+            else:
+                await self._callback(prompt, room_id)
             self._jobs[job_id]["last_status"] = "success"
             logger.info(f"✅ Cronjob '{name}' ejecutado exitosamente")
         except Exception as e:
