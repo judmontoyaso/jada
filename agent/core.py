@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logger = logging.getLogger("miniclaw")
+logger = logging.getLogger("jada")
 
 # Timeout para NIM — agresivo para failover rápido
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))

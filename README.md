@@ -1,6 +1,6 @@
-# 🤖 MiniClaw — Asistente de IA Personal
+# 🤖 Jada — Personal AI Agent
 
-Un asistente de IA personal conectado a **Matrix/Element**, usando modelos de **NVIDIA NIM API** como LLM. Sigue el patrón **ReAct** (Reasoning + Acting) con memoria persistente, herramientas modulares y soporte multi-room.
+Un agente de IA personal conectado a **Matrix/Element**, usando modelos de **NVIDIA NIM API** como LLM. Sigue el patrón **ReAct** (Reasoning + Acting) con memoria persistente, herramientas modulares y soporte multi-room.
 
 ---
 

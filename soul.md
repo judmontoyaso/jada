@@ -1,4 +1,4 @@
-# Soul - Memoria de MiniClaw
+# Soul - Memoria de Jada
 
 ## .agent
 - Cuando te pida mostrar un popup en PC, usa este comando:

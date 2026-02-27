@@ -86,7 +86,7 @@ def _fetch_ics() -> str:
             "'Secret address in iCal format' y copia la URL."
         )
 
-    req = Request(CALENDAR_ICS_URL, headers={"User-Agent": "MiniClaw/1.0"})
+    req = Request(CALENDAR_ICS_URL, headers={"User-Agent": "Jada/1.0"})
     with urlopen(req, timeout=15) as resp:
         return resp.read().decode("utf-8", errors="replace")
 

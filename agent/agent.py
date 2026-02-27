@@ -18,7 +18,7 @@ from tools.gym_parser import expand_gym_notation
 
 load_dotenv()
 
-AGENT_NAME = os.getenv("AGENT_NAME", "MiniClaw")
+AGENT_NAME = os.getenv("AGENT_NAME", "Jada")
 MAX_ITERATIONS = int(os.getenv("MAX_TOOL_ITERATIONS", "10"))
 
 
@@ -84,8 +84,8 @@ SYSTEM_PROMPT = os.getenv(
     "11. Cuando el usuario mencione apagar, encender, o cambiar el volumen o HDMI del TV/televisor, usa SIEMPRE samsung_tv_control.",
 )
 
-logger = logging.getLogger("miniclaw")
-audit_logger = logging.getLogger("miniclaw.audit")
+logger = logging.getLogger("jada")
+audit_logger = logging.getLogger("jada.audit")
 
 # ─── Categorías de Tools ──────────────────────────────────────────────────────
 # Dividimos las tools en categorías para enviar solo las relevantes al LLM.

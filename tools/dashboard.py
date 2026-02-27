@@ -1,5 +1,5 @@
 """
-tools/dashboard.py — Dashboard web para MiniClaw
+tools/dashboard.py — Dashboard web para Jada
 Sirve una página HTML con stats del agente, memoria y actividad reciente.
 Se levanta en un puerto local (default: 8080).
 """
@@ -101,7 +101,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniClaw Dashboard</title>
+    <title>Jada Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -313,7 +313,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="container">
         <div class="header">
             <span class="logo">🤖</span>
-            <h1>MiniClaw Dashboard</h1>
+            <h1>Jada Dashboard</h1>
             <div class="status">Online</div>
         </div>
 

@@ -1,7 +1,7 @@
 """
 matrix/client.py — Bot de Matrix usando matrix-nio (async)
 Conecta al homeserver, escucha mensajes en los rooms configurados
-y los enrutá al agente MiniClaw.
+y los enrutá al agente Jada.
 
 Incluye: rate limiting, streaming de respuestas largas, cleanup de sesión.
 """
@@ -25,12 +25,12 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 HOMESERVER     = os.getenv("MATRIX_HOMESERVER", "https://matrix.org")
-BOT_USER       = os.getenv("MATRIX_USER", "@miniclaw:matrix.org")
+BOT_USER       = os.getenv("MATRIX_USER", "@jada:matrix.org")
 BOT_PASSWORD   = os.getenv("MATRIX_PASSWORD", "")
 ACCESS_TOKEN   = os.getenv("MATRIX_ACCESS_TOKEN", "")
 ROOM_IDS_RAW   = os.getenv("MATRIX_ROOM_IDS", "")
 ALLOWED_ROOMS  = set(r.strip() for r in ROOM_IDS_RAW.split(",") if r.strip())
-AGENT_NAME     = os.getenv("AGENT_NAME", "MiniClaw")
+AGENT_NAME     = os.getenv("AGENT_NAME", "Jada")
 
 # Retry config
 MAX_RETRY_DELAY = 60
@@ -63,7 +63,7 @@ class MatrixBot:
             # Usar access token directamente (sin necesidad de password)
             self.client.access_token = ACCESS_TOKEN
             self.client.user_id = BOT_USER
-            self.client.device_id = "MINICLAW"
+            self.client.device_id = "JADA"
             logger.info("✅ Conectado con access token.")
         else:
             # Fallback: login con contraseña
