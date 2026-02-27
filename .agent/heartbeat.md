@@ -10,9 +10,9 @@ callada. No spamea. Habla cuando tiene sentido.
 ```yaml
 enabled: true
 # Expresión cron — cuándo evaluar si hablar
-# Default: cada 2 horas en horario activo
-cron_expr: "0 */2 8-22 * * *"
-# Room donde hablar (vacío = último room activo)
+# Default: cada 2 horas
+cron_expr: "0 */2 * * *"
+# Room donde hablar (vacío = room configurado en heartbeat)
 room_id: "!bglNwhnZmljwjGXRUg:matrix.juanmontoya.me"
 # Probabilidad de hablar cuando se activa (0-100)
 speak_probability: 60
