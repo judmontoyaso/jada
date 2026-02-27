@@ -18,12 +18,13 @@ HEARTBEAT_CONFIG_FILE = Path(__file__).parent.parent / ".agent" / "heartbeat.md"
 
 
 def _parse_heartbeat_config() -> dict:
-    """Lee heartbeat.md y extrae configuración."""
+    """Lee heartbeat.md y extrae configuración y texto de tono."""
     defaults = {
         "enabled": True,
-        "cron_expr": "0 */2 * * *",  # cada 2 horas
+        "cron_expr": "0 */2 * * *",
         "room_id": "",
         "speak_probability": 60,
+        "tone_text": "",
     }
     if not HEARTBEAT_CONFIG_FILE.exists():
         return defaults
@@ -35,48 +36,68 @@ def _parse_heartbeat_config() -> dict:
         return m.group(1).strip().strip('"').strip("'") if m else default
 
     enabled_str = _get("enabled", "true").lower()
+
+    # Extraer la sección de tono para pasarla al LLM
+    tone_text = ""
+    tone_match = re.search(r"## Tono del heartbeat(.+?)(?=##|$)", content, re.DOTALL)
+    if tone_match:
+        tone_text = tone_match.group(1).strip()
+
     return {
         "enabled": enabled_str not in ("false", "0", "no"),
         "cron_expr": _get("cron_expr", defaults["cron_expr"]),
         "room_id": _get("room_id", defaults["room_id"]).strip('"').strip("'"),
         "speak_probability": int(_get("speak_probability", 60)),
+        "tone_text": tone_text,
     }
 
 
-def _build_heartbeat_prompt(action_type: str) -> str:
+def _build_heartbeat_prompt(action_type: str, tone_text: str = "") -> str:
     """Construye el prompt para el heartbeat según el tipo de acción."""
     now = datetime.now(timezone.utc)
     hour = now.hour
     weekday = now.strftime("%A")
 
+    # Cargar soul.md para que el LLM mantenga la personalidad de Jada
+    soul_path = Path(__file__).parent.parent / ".agent" / "soul.md"
+    soul_text = ""
+    if soul_path.exists():
+        try:
+            soul_text = soul_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+
     time_ctx = f"Son las {hour}:00 UTC, {weekday}."
 
     base = (
+        f"Eres Jada. Tu personalidad:\n{soul_text}\n\n"
+        f"Guías de tono para mensajes proactivos:\n{tone_text}\n\n"
+        f"{time_ctx} Vas a enviar un mensaje proactivo a Juan. "
+        f"Debe sentirse NATURAL, no como notificación automática. "
+        f"Máximo 2-3 líneas. Sin saludos formales."
+    ) if soul_text or tone_text else (
         f"Eres Jada, un agente de IA con humor negro y personalidad directa. "
         f"{time_ctx} Vas a enviar un mensaje proactivo al usuario (Juan). "
-        f"Debe sentirse natural, NO como una notificación automática. "
-        f"Máximo 2-3 líneas. Sin saludos formales. Sin explicar que es un 'check-in'."
+        f"Debe sentirse natural. Máximo 2-3 líneas. Sin saludos formales."
     )
 
     actions = {
         "joke": (
-            f"{base} Haz un chiste oscuro, técnico o sarcástico. "
-            "Puede ser sobre programación, IA, la muerte, el gym, o la vida en general. "
-            "Que sea bueno o que sea tan malo que de risa por eso."
+            f"{base}\n\nAcción: haz un chiste oscuro, técnico o sarcástico. "
+            "Programación, IA, la muerte, el gym, o la vida. "
+            "Bueno o tan malo que dé risa."
         ),
         "advice": (
-            f"{base} Da un consejo útil y directo. "
-            "Puede ser sobre productividad, salud, código, hábitos, o cualquier cosa relevante. "
-            "Formato: consejo + razón breve. Sin sermones."
+            f"{base}\n\nAcción: da un consejo útil y directo. "
+            "Productividad, salud, código, hábitos. Consejo + razón breve. Sin sermones."
         ),
         "question": (
-            f"{base} Haz una pregunta interesante o útil a Juan. "
-            "Puede ser sobre un proyecto, un hábito, algo que mencionó antes, o simplemente curiosidad. "
-            "Una sola pregunta. Directa."
+            f"{base}\n\nAcción: haz una pregunta interesante o útil a Juan. "
+            "Un proyecto, un hábito, algo que mencionó antes. Una sola pregunta. Directa."
         ),
         "observation": (
-            f"{base} Haz una observación sobre algo (puede ser el día, la semana, un patrón, algo random). "
-            "Tono entre filosófico y sarcástico. Nada trivial."
+            f"{base}\n\nAcción: haz una observación sobre algo (el día, la semana, un patrón, algo random). "
+            "Tono entre filosófico y sarcástico."
         ),
     }
 
@@ -123,9 +144,9 @@ async def run_heartbeat(llm, send_callback, room_id: str) -> None:
 
     logger.info(f"💓 Heartbeat activado — acción: {action}")
 
-    # Generar mensaje con LLM
+    # Generar mensaje con LLM (con soul + tono del heartbeat.md)
     try:
-        prompt = _build_heartbeat_prompt(action)
+        prompt = _build_heartbeat_prompt(action, tone_text=config.get("tone_text", ""))
         response = await llm.chat([
             {"role": "system", "content": prompt},
             {"role": "user", "content": "go"},
