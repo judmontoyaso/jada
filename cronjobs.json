@@ -1,0 +1,20 @@
+{
+  "version": "2.0",
+  "last_update": "2026-02-27T17:58:19.502937+00:00",
+  "cronjobs": {
+    "cron-1772214873": {
+      "id": "cron-1772214873",
+      "name": "Consultar correo cada 2 minutos",
+      "cron_expr": "*/2 * * * *",
+      "prompt": "Consulta el correo del usuario usando email_list y muéstrale un resumen de los correos nuevos (remitente, asunto, hora). Si hay correos nuevos, indícalo claramente.",
+      "room_id": "!bglNwhnZmljwjGXRUg:matrix.juanmontoya.me",
+      "description": "",
+      "timezone": "UTC",
+      "enabled": true,
+      "next_run_at": 1772215200,
+      "last_run_at": 1772215099,
+      "last_status": "running",
+      "created_at": 1772214873
+    }
+  }
+}

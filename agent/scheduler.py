@@ -101,6 +101,17 @@ class JadaScheduler:
         if not validate_cron_expr(cron_expr):
             raise ValueError(f"Expresión cron inválida: '{cron_expr}'")
 
+        # ── Deduplicación: evitar cronjobs idénticos ──────────────────────────
+        for existing in self._jobs.values():
+            same_expr = existing["cron_expr"] == cron_expr
+            same_room = existing["room_id"] == room_id
+            same_name = existing["name"].lower().strip() == name.lower().strip()
+            if same_expr and same_room and same_name:
+                logger.warning(f"⚠️ Cronjob duplicado detectado: '{name}' ya existe (id={existing['id']}). Ignorando.")
+                existing["_duplicate"] = True
+                return existing  # Retorna el existente sin crear uno nuevo
+        # ─────────────────────────────────────────────────────────────────────
+
         next_run = compute_next_run(cron_expr, timezone_str)
 
         job = {

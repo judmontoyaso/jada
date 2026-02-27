@@ -543,7 +543,14 @@ class ToolDispatcher:
                     description=args.get("description", ""),
                     timezone_str=args.get("timezone", "UTC"),
                 )
-                return {"success": True, "job": job, "message": f"✅ Tarea '{args['name']}' creada con ID {job_id}"}
+                if job.get("_duplicate"):
+                    return {
+                        "success": False,
+                        "duplicate": True,
+                        "existing_id": job["id"],
+                        "message": f"⚠️ Ya existe una tarea igual: '{job['name']}' (ID: {job['id']}). No se creó un duplicado.",
+                    }
+                return {"success": True, "job": job, "message": f"✅ Tarea '{args['name']}' creada con ID {job['id']}"}
 
             case "cronjob_list":
                 sched = get_scheduler()
