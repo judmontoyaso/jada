@@ -71,7 +71,7 @@ def print_banner(live_logs: bool = False) -> None:
  ╚════╝ ╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝{RESET}
 
 {MAGENTA}  ╔══════════════════════════════════════════╗
-  ║{RESET}  {BOLD}Personal AI Agent{RESET}  {DIM}— powered by NVIDIA NIM{RESET}  {MAGENTA}║
+  ║{RESET}       {BOLD}Personal AI Agent{RESET}  {DIM}— 5panes{RESET}           {MAGENTA}║
   ╚══════════════════════════════════════════╝{RESET}
 
   {DIM}Version:{RESET}  {YELLOW}{VERSION}{RESET}
