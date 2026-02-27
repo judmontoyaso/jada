@@ -164,9 +164,15 @@ TOOL_CATEGORIES = {
             "automatiza", "automatizar", "automáticamente",
             "pón a revisar", "pon a revisar", "programa que", "programa una",
             "repite", "repíteme", "hazlo cada",
-            # Gestión de tareas
-            "listar tareas", "mis tareas programadas", "borra tarea", "eliminar tarea",
-            "qué tareas", "que tareas", "ver tareas",
+            # Gestión — listar
+            "listar tareas", "mis tareas programadas", "qué tareas", "que tareas", "ver tareas",
+            "mis programadas", "mis cronjobs",
+            # Gestión — cancelar / borrar / pausar
+            "cancela", "cancelar", "cancela el", "cancela esa", "cancela ese",
+            "borra tarea", "borra ese", "borra esa", "eliminar tarea", "elimina ese", "elimina esa",
+            "pausa", "pausar", "pausa ese", "pausa esa", "pausa el",
+            "deshabilita", "desactiva", "detén el job", "detén la tarea",
+            "activa el", "activa ese", "habilita el",
         ],
         "tools": {"cronjob_create", "cronjob_list", "cronjob_delete", "cronjob_update", "cronjob_run_now"},
     },
