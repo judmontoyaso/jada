@@ -189,8 +189,11 @@ class Agent:
     def __init__(self):
         self.llm = NvidiaLLM()
         self.memory = Memory()
+        self._send_callback = None  # Callback para enviar mensajes al room
 
     async def init(self):
+        # Inyectar LLM en memoria para compresión con resúmenes inteligentes
+        self.memory.set_llm(self.llm)
         await self.memory.init()
 
     async def run_scheduled(self, prompt: str, room_id: str) -> None:

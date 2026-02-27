@@ -285,7 +285,8 @@ TOOL_SCHEMAS = [
     # ── Memoria ────────────────────────────────────────────────────────────────
     _fn("remember_fact",
         "Guarda un hecho importante sobre el usuario en la memoria a largo plazo.",
-        {"fact": ("string", "Hecho a recordar sobre el usuario")},
+        {"fact": ("string", "Hecho a recordar sobre el usuario"),
+         "category": ("string", "Categoría: 'preferencia', 'personal', 'habito', 'trabajo', 'general' (default: general)")},
         required=["fact"]),
 
     # ── Cronjobs (tareas programadas del agente) ───────────────────────────────────
@@ -516,8 +517,10 @@ class ToolDispatcher:
             # Memory
             case "remember_fact":
                 if self._memory and self._user_id:
-                    await self._memory.save_fact(self._user_id, args["fact"])
-                return {"success": True, "fact_saved": args["fact"]}
+                    await self._memory.save_fact(
+                        self._user_id, args["fact"], args.get("category", "general")
+                    )
+                return {"success": True, "fact_saved": args["fact"], "category": args.get("category", "general")}
 
             # Cronjobs — tareas programadas del agente
             case "cronjob_create":
