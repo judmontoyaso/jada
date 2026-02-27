@@ -92,7 +92,7 @@ audit_logger = logging.getLogger("jada.audit")
 # Esto reduce el payload y evita 504 Gateway Timeouts en NVIDIA NIM.
 
 # Tools que siempre se envían (core, ligeras)
-CORE_TOOLS = {"remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think"}
+CORE_TOOLS = {"remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think", "cronjob_list", "cronjob_create"}
 
 # ID de usuario ficticio para mensajes del scheduler
 SCHEDULER_USER_ID = "@scheduler:jada"
@@ -151,9 +151,23 @@ TOOL_CATEGORIES = {
         "tools": {"samsung_list_devices", "samsung_tv_status", "samsung_tv_control"},
     },
     "cronjobs": {
-        "keywords": ["cron", "cronjob", "tarea programada", "programa", "schedulea", "crear tarea",
-                      "cada día", "cada semana", "cada hora", "automatiza", "automatizar",
-                      "listar tareas", "mis tareas", "borra tarea", "eliminar tarea"],
+        "keywords": [
+            # Palabras clave directas
+            "cron", "cronjob", "tarea programada", "schedulea",
+            # Patrones de tiempo recurrente  
+            "cada minuto", "cada dos", "cada tres", "cada cinco", "cada diez",
+            "cada 15", "cada 30", "cada 2", "cada 5", "cada 10",
+            "cada día", "cada semana", "cada hora", "cada mes",
+            "todos los días", "todos los lunes", "todos los martes",
+            "diariamente", "semanalmente", "mensualmente",
+            # Intención de automatización recurrente
+            "automatiza", "automatizar", "automáticamente",
+            "pón a revisar", "pon a revisar", "programa que", "programa una",
+            "repite", "repíteme", "hazlo cada",
+            # Gestión de tareas
+            "listar tareas", "mis tareas programadas", "borra tarea", "eliminar tarea",
+            "qué tareas", "que tareas", "ver tareas",
+        ],
         "tools": {"cronjob_create", "cronjob_list", "cronjob_delete", "cronjob_update", "cronjob_run_now"},
     },
 }

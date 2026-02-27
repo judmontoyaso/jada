@@ -10,6 +10,7 @@ import argparse
 import logging
 import os
 import sys
+import atexit
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -18,7 +19,27 @@ from agent.agent import Agent
 from matrix.client import MatrixBot
 from tools.dashboard import start_dashboard
 
-VERSION = "0.5.1"
+VERSION = "0.5.2"
+PIDFILE = os.getenv("JADA_PIDFILE", "jada.pid")
+
+
+def _acquire_lock() -> bool:
+    """Crea un PID lock para evitar dos instancias simultáneas. Retorna True si OK."""
+    if os.path.exists(PIDFILE):
+        try:
+            with open(PIDFILE) as f:
+                old_pid = int(f.read().strip())
+            # Verificar si el proceso anterior sigue vivo
+            import psutil
+            if psutil.pid_exists(old_pid):
+                return False  # otra instancia activa
+        except Exception:
+            pass  # PID file corrupto o psutil no instalado — continuar
+    # Escribir PID actual
+    with open(PIDFILE, "w") as f:
+        f.write(str(os.getpid()))
+    atexit.register(lambda: os.path.exists(PIDFILE) and os.unlink(PIDFILE))
+    return True
 
 
 def setup_logging(live_logs: bool) -> None:
@@ -125,6 +146,12 @@ Modos:
         help="Mostrar logs en tiempo real en la consola",
     )
     args = parser.parse_args()
+
+    # Bloquear doble instancia
+    if not _acquire_lock():
+        print(f"\n  ⚠️  Jada ya está corriendo (PID en {PIDFILE}).")
+        print("  Detén la instancia anterior con Ctrl+C antes de arrancar una nueva.\n")
+        sys.exit(1)
 
     setup_logging(args.livelogs)
     print_banner(args.livelogs)

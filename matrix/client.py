@@ -52,8 +52,11 @@ class MatrixBot:
             config=AsyncClientConfig(max_limit_exceeded=0, max_timeouts=0),
         )
         self._start_token = None
-        # Rate limiting: {user_id: [timestamp, timestamp, ...]}
+        # Rate limiting: {user_id: [timestamp, ...]}
         self._user_timestamps = defaultdict(list)
+        # Deduplicación: event_ids ya procesados (evita doble respuesta si hay 2 instancias)
+        self._processed_events: set[str] = set()
+        self._MAX_PROCESSED = 500  # evitar memory leak en sesiones largas
 
     async def start(self):
         """Conectar al servidor Matrix e iniciar el loop de eventos con retry."""
@@ -161,24 +164,33 @@ class MatrixBot:
             await self._send(room.room_id, "🗑️ Historial borrado.")
             return
 
-        logger.info(f"📨 [{room.room_id}] {event.sender}: {message[:80]}...")
+        logger.info(f"📨 [{room.room_id}] {event.sender}: {message[:80]}")
 
-        # Reacción ⏳ al recibir el mensaje
-        await self._react(room.room_id, event.event_id, "⏳")
+        # Deduplicar: ignorar si ya lo procesamos (protege contra doble instancia)
+        if event.event_id in self._processed_events:
+            logger.debug(f"Evento duplicado ignorado: {event.event_id}")
+            return
+        self._processed_events.add(event.event_id)
+        # Limpiar set si crece demasiado
+        if len(self._processed_events) > self._MAX_PROCESSED:
+            self._processed_events = set(list(self._processed_events)[-self._MAX_PROCESSED // 2:])
 
         try:
+            # Mostrar indicador "escribiendo..." mientras procesa
+            await self._set_typing(room.room_id, typing=True)
             response = await self.agent.chat(
                 user_message=message,
                 user_id=event.sender,
                 room_id=room.room_id,
             )
-            # Reacción ✅ al completar
             await self._react(room.room_id, event.event_id, "✅")
         except Exception as e:
             logger.exception(f"Error en agente: {e}")
             response = f"⚠️ Error procesando tu mensaje: {str(e)}"
-            # Reacción ❌ en error
             await self._react(room.room_id, event.event_id, "❌")
+        finally:
+            # Siempre apagar el typing indicator
+            await self._set_typing(room.room_id, typing=False)
 
         await self._send(room.room_id, response)
 
@@ -261,6 +273,13 @@ class MatrixBot:
             chunks.append(text)
 
         return chunks
+
+    async def _set_typing(self, room_id: str, typing: bool, timeout: int = 30000):
+        """Enviar indicador de escritura ('escribiendo...') al room."""
+        try:
+            await self.client.room_typing(room_id, typing=typing, timeout=timeout)
+        except Exception as e:
+            logger.debug(f"No se pudo enviar typing indicator: {e}")
 
     async def _react(self, room_id: str, event_id: str, emoji: str):
         """Enviar una reacción emoji a un evento."""
