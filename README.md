@@ -351,3 +351,124 @@ El bot guarda hechos con `remember_fact` y los incluye automáticamente en cada 
 | `Unclosed client session` al cerrar | ⚡ Cosmético | No afecta funcionalidad |
 | LLM dice "no tengo acceso al correo" | 🔧 En progreso | System prompt reforzado + keywords mejorados |
 | `.env` corrupto con datos de gym | ✅ Resuelto | Datos de entrenamiento eliminados del archivo |
+
+---
+
+## ⏰ Feature: Gestor de CronJobs con GUI (NUEVO)
+
+**Estado:** 🟡 En desarrollo - Rama `feature/cronjobs-gui`  
+**Fecha:** 2026-02-26
+
+### 📋 Descripción
+
+Sistema completo de gestión de tareas programadas (cronjobs) con interfaz gráfica web. Permite crear, editar, eliminar y monitorear cronjobs sin necesidad de editar archivos de sistema manualmente.
+
+### 🏗️ Arquitectura
+
+```
+mini_claw/
+├── tools/
+│   ├── cronjobs_model.py      # Modelo de datos y parser cron
+│   ├── cronjobs_api.py        # API REST completa
+│   ├── cronjobs_scheduler.py  # Motor de ejecución programada
+│   └── cronjobs_gui.html      # Interfaz web completa
+└── tests/
+    └── test_cronjobs.py       # Tests unitarios (25/26 pasando)
+```
+
+### 🔧 Componentes
+
+#### 1. Modelo de Datos (`cronjobs_model.py`)
+- `Cronjob`: Clase principal con todos los campos
+- `CronjobManager`: Gestor CRUD con persistencia JSON
+- `CronParser`: Parser de expresiones cron estándar
+
+#### 2. API REST (`cronjobs_api.py`)
+Endpoints disponibles:
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/cronjobs` | Listar todos |
+| GET | `/api/cronjobs/<id>` | Obtener uno |
+| GET | `/api/cronjobs/<id>/logs` | Ver logs |
+| POST | `/api/cronjobs` | Crear |
+| POST | `/api/cronjobs/<id>/run` | Ejecutar ahora |
+| PUT | `/api/cronjobs/<id>` | Actualizar |
+| DELETE | `/api/cronjobs/<id>` | Eliminar |
+
+#### 3. Scheduler (`cronjobs_scheduler.py`)
+- Ejecución automática según programación cron
+- Sistema de callbacks post-ejecución
+- Logs de ejecución por cada job
+- Integración con crontab del sistema
+
+#### 4. Interfaz GUI (`cronjobs_gui.html`)
+- Dashboard con estadísticas en tiempo real
+- Formulario de creación/edición
+- Lista visual de cronjobs con estado
+- Botones de acción: ejecutar, pausar, editar, eliminar
+- Visualización de logs de ejecución
+- Auto-refresh cada 30 segundos
+
+### 🚀 Uso
+
+#### Iniciar API:
+```bash
+cd mini_claw
+python3 tools/cronjobs_api.py
+# Servidor en http://localhost:8080
+```
+
+#### Iniciar Scheduler:
+```bash
+python3 tools/cronjobs_scheduler.py
+# Monitorea y ejecuta cronjobs programados
+```
+
+#### Acceder a GUI:
+```
+http://localhost:8080/tools/cronjobs_gui.html
+```
+
+### 📝 Ejemplo de uso
+
+```python
+from tools.cronjobs_model import Cronjob, CronjobManager
+
+# Crear cronjob
+manager = CronjobManager()
+job = Cronjob(
+    id="noticias-diarias",
+    name="Noticias Diarias",
+    expression="0 6 * * *",  # Cada día a las 6 AM
+    command="python main.py --task noticias",
+    description="Busca noticias cada mañana"
+)
+manager.add(job)
+
+# Listar cronjobs activos
+for job in manager.list_enabled():
+    print(f"{job.name}: {job.expression}")
+```
+
+### ✅ Tests
+
+```bash
+cd mini_claw
+PYTHONPATH=. python3 tests/test_cronjobs.py
+# Resultado: 25/26 tests pasando
+```
+
+### 🔜 Próximos pasos
+- [ ] Conectar GUI completamente con API
+- [ ] Integrar con sistema de notificaciones
+- [ ] Crear Pull Request a main
+- [ ] Documentación adicional
+
+### 👥 Equipo de Desarrollo
+- **Agente Principal:** MiniMax-M2.1 (backend, lógica)
+- **Agente Asistente:** Qwen3-VL-30B (diseño UI)
+
+---
+
+**Desarrollado por:** Equipo de IA - OpenClaw  
+**Versión:** 0.5.0 (PR en desarrollo)
