@@ -91,7 +91,9 @@ audit_logger = logging.getLogger("jada.audit")
 # Tools que siempre se envían (core, ligeras)
 CORE_TOOLS = {
     "remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think",
-    # Cronjobs SIEMPRE disponibles — usar SOLO estas tools para gestionar tareas, NUNCA curl/run_command
+    # Email SIEMPRE disponible — el modelo DEBE llamar email_list y nunca alucinar resultados
+    "email_list",
+    # Cronjobs SIEMPRE disponibles
     "cronjob_list", "cronjob_create", "cronjob_delete", "cronjob_update", "cronjob_run_now",
 }
 
@@ -111,12 +113,24 @@ TOOL_CATEGORIES = {
                   "gym_save_routine", "gym_get_routines", "gym_get_stats"},
     },
     "email": {
-        "keywords": ["correo", "correos", "email", "emails", "mail", "inbox", "bandeja",
-                      "mensaje recibido", "mensajes recibidos", "gmail", "remitente", "asunto",
-                      "recibidos", "enviados", "último correo", "últimos correos",
-                      "revisa mi", "leer correo", "lee mi", "mis correos", "mi correo",
-                      "imap", "no leído", "no leidos", "enviar correo", "manda un correo",
-                      "envía", "enviale", "escríbele", "mandar email", "enviar email"],
+        "keywords": [
+            # Palabras directas
+            "correo", "correos", "email", "emails", "mail", "inbox", "bandeja",
+            "gmail", "remitente", "asunto", "imap", "no leído", "no leidos",
+            # Frases con 'correo'
+            "mi correo", "mis correos", "mi email", "mis emails",
+            "mensaje recibido", "mensajes recibidos", "recibidos", "enviados",
+            "revisa mi", "leer correo", "lee mi",
+            "último correo", "últimos correos", "correos de hoy", "correos nuevos",
+            # Frases naturales sin 'correo' — estas eran las que fallaban
+            "qué llegó", "que llego", "qué tengo nuevo", "que tengo nuevo",
+            "qué hay nuevo", "hay algo nuevo", "qué recibí", "qué entró",
+            "consulta los", "consulta mis", "nuevos mensajes",
+            "los nuevos", "los últimos", "recientes",
+            # Enviar
+            "enviar correo", "manda un correo", "envía", "envíale",
+            "escríbele", "mandar email", "enviar email",
+        ],
         "tools": {"email_list", "email_read", "email_search", "email_send"},
     },
     "calendar": {
