@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "last_update": "2026-02-27T18:20:09.607388+00:00",
+  "last_update": "2026-02-27T18:23:30.141Z",
   "cronjobs": {
     "cron-1772214873": {
       "id": "cron-1772214873",
@@ -10,9 +10,9 @@
       "room_id": "!bglNwhnZmljwjGXRUg:matrix.juanmontoya.me",
       "description": "",
       "timezone": "UTC",
-      "enabled": true,
-      "next_run_at": 1772216520,
-      "last_run_at": 1772216409,
+      "enabled": false,
+      "next_run_at": 1772216640,
+      "last_run_at": 1772216529,
       "last_status": "running",
       "created_at": 1772214873
     },
