@@ -222,14 +222,36 @@ class JadaScheduler:
         while self._running:
             now = int(time.time())
             self._load()  # Re-cargar por si hubo cambios externos
+            needs_save = False
 
             for job_id, job in list(self._jobs.items()):
                 if not job.get("enabled", True):
                     continue
 
                 next_run = job.get("next_run_at")
+
+                # Si next_run_at es None o está muy lejos en el futuro (>7 días),
+                # recalcular con la expresión cron actual
+                if not next_run or next_run > now + 7 * 86400:
+                    try:
+                        next_run = compute_next_run(
+                            job["cron_expr"],
+                            job.get("timezone", "UTC"),
+                        )
+                        self._jobs[job_id]["next_run_at"] = next_run
+                        needs_save = True
+                        logger.info(f"📅 next_run recalculado para '{job['name']}': "
+                                    f"{datetime.fromtimestamp(next_run, tz=timezone.utc).isoformat()}")
+                    except Exception as e:
+                        logger.error(f"Error calculando next_run para '{job['name']}': {e}")
+                        continue
+
                 if next_run and now >= next_run:
+                    logger.info(f"⏰ Disparando cronjob '{job['name']}' (era: {next_run}, ahora: {now})")
                     asyncio.create_task(self._execute_job(job))
+
+            if needs_save:
+                self._save()
 
             await asyncio.sleep(POLL_INTERVAL)
 
