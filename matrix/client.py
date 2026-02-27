@@ -175,16 +175,50 @@ class MatrixBot:
         if len(self._processed_events) > self._MAX_PROCESSED:
             self._processed_events = set(list(self._processed_events)[-self._MAX_PROCESSED // 2:])
 
+        # Timeouts configurables
+        THINK_TIMEOUT   = int(os.getenv("JADA_THINK_TIMEOUT", "90"))   # seg máx para responder
+        NUDGE_AFTER     = int(os.getenv("JADA_NUDGE_AFTER",   "25"))   # seg antes de avisar
+
+        # Mensajes de progreso si tarda (humor negro incluído)
+        NUDGE_MSGS = [
+            "_Todavía estoy aquí, sólo pensando muy fuerte..._",
+            "_Procesando. Mi GPU imaginaria está ardiendo._",
+            "_Sigo viva. Esto está tardando más de lo normal._",
+        ]
+        import random as _rnd
+
+        async def _nudge():
+            """Avisa al usuario si la respuesta tarda demasiado."""
+            await asyncio.sleep(NUDGE_AFTER)
+            try:
+                await self._send(room.room_id, _rnd.choice(NUDGE_MSGS))
+            except Exception:
+                pass
+
+        nudge_task = asyncio.create_task(_nudge())
         try:
             # Mostrar indicador "escribiendo..." mientras procesa
             await self._set_typing(room.room_id, typing=True)
-            response = await self.agent.chat(
-                user_message=message,
-                user_id=event.sender,
-                room_id=room.room_id,
+            response = await asyncio.wait_for(
+                self.agent.chat(
+                    user_message=message,
+                    user_id=event.sender,
+                    room_id=room.room_id,
+                ),
+                timeout=THINK_TIMEOUT,
             )
+            nudge_task.cancel()
             await self._react(room.room_id, event.event_id, "✅")
+        except asyncio.TimeoutError:
+            nudge_task.cancel()
+            logger.warning(f"⏱️ Timeout ({THINK_TIMEOUT}s) procesando mensaje de {event.sender}")
+            response = (
+                f"⚠️ Me trové pensando por más de {THINK_TIMEOUT}s y decidí rendirme. "
+                "La API de NIM está lenta hoy. Intenta de nuevo."
+            )
+            await self._react(room.room_id, event.event_id, "❌")
         except Exception as e:
+            nudge_task.cancel()
             logger.exception(f"Error en agente: {e}")
             response = f"⚠️ Error procesando tu mensaje: {str(e)}"
             await self._react(room.room_id, event.event_id, "❌")
