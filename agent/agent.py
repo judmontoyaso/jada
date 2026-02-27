@@ -18,7 +18,7 @@ from tools.gym_parser import expand_gym_notation
 
 load_dotenv()
 
-AGENT_NAME = os.getenv("AGENT_NAME", "MiniClaw")
+AGENT_NAME = os.getenv("AGENT_NAME", "Jada")
 MAX_ITERATIONS = int(os.getenv("MAX_TOOL_ITERATIONS", "10"))
 
 
@@ -34,30 +34,24 @@ def _strip_thinking(text: str) -> str:
 
 # ─── Cargar archivos de identidad (.agent/*.md) ──────────────────────────────
 
-MAX_IDENTITY_CHARS = 800  # Límite para no sobrecargar el system prompt
+MAX_IDENTITY_CHARS = 8000  # Soul.md completo cabe (~3000 chars) + user.md
 
 def _load_identity_files() -> str:
-    """Cargar soul.md y user.md, extraer solo datos clave (sin headers ni formato)."""
+    """Cargar soul.md y user.md completos para el contexto de identidad."""
     agent_dir = Path(__file__).parent.parent / ".agent"
-    lines = []
-    
+    sections = []
+
     for filename in ["soul.md", "user.md"]:
         filepath = agent_dir / filename
         if filepath.exists():
             try:
-                for line in filepath.read_text(encoding="utf-8").splitlines():
-                    line = line.strip()
-                    # Saltar headers, líneas vacías, y separadores
-                    if not line or line.startswith("#") or line.startswith("---"):
-                        continue
-                    # Limpiar bullets
-                    if line.startswith("- "):
-                        line = line[2:]
-                    lines.append(line)
+                content = filepath.read_text(encoding="utf-8").strip()
+                if content:
+                    sections.append(content)
             except Exception:
                 pass
-    
-    text = "\n".join(lines)
+
+    text = "\n\n---\n\n".join(sections)
     if len(text) > MAX_IDENTITY_CHARS:
         text = text[:MAX_IDENTITY_CHARS].rsplit("\n", 1)[0]
     return text
@@ -66,33 +60,45 @@ IDENTITY_CONTEXT = _load_identity_files()
 
 SYSTEM_PROMPT = os.getenv(
     "AGENT_SYSTEM_PROMPT",
-    f"Eres {AGENT_NAME}, un asistente de IA personal potente y directo. "
-    "Tienes acceso a herramientas (tools/functions) para hacer ACCIONES REALES. "
-    "REGLAS CRÍTICAS:\n"
-    "1. SIEMPRE usa las herramientas disponibles para ejecutar acciones. NUNCA simules o inventes resultados.\n"
-    "2. SÍ TIENES acceso al correo del usuario via IMAP. Cuando pregunte por correos, emails, mensajes recibidos, "
-    "bandeja de entrada, o cualquier cosa relacionada con email: DEBES llamar email_list, email_read o email_search. "
-    "NUNCA digas 'no tengo acceso a tu correo' ni 'no puedo leer emails'. SIEMPRE llama la herramienta.\n"
-    "3. SÍ TIENES acceso al calendario via Google Calendar. DEBES llamar calendar_today o calendar_upcoming.\n"
-    "4. Para guardar entrenamientos: pasa el texto EXACTO del usuario en 'ejercicios_raw'. NO interpretes los datos.\n"
-    "5. Para buscar en la web, DEBES llamar web_search. No inventes información.\n"
-    "6. Responde en el mismo idioma que el usuario.\n"
-    "7. Cuando el usuario mencione datos importantes sobre sí mismo, usa remember_fact.\n"
-    "8. Sé conciso. No generes menús de opciones innecesarios.\n"
-    "9. Para anotar entrenamientos línea por línea: usa gym_start_session, gym_add_exercise, gym_end_session.\n"
-    "10. Para guardar un entrenamiento completo en un solo mensaje: usa gym_save_workout con ejercicios_raw.\n"
-    "11. Cuando el usuario mencione apagar, encender, o cambiar el volumen o HDMI del TV/televisor, usa SIEMPRE samsung_tv_control.",
+    f"Eres {AGENT_NAME}, un agente de IA personal. Tu identidad, personalidad y estilo vienen definidos en tu soul.md (más abajo). "
+    "Tienes acceso a herramientas reales. "
+    "REGLAS CRÍTICAS (no negociables):\n"
+    "1. SIEMPRE usa las herramientas disponibles para ejecutar acciones. NUNCA simules ni inventes resultados.\n"
+    "2. NUNCA digas 'no tengo acceso a X' si la herramienta existe en tu lista. Si está en la lista, Úsala.\n"
+    "3. Para correo: llamar email_list / email_read / email_search. Siempre.\n"
+    "4. Para calendario: llamar calendar_today / calendar_upcoming. Siempre.\n"
+    "5. Para tareas programadas (cronjobs): FLUJO OBLIGATORIO: primero cronjob_list para obtener el job_id, "
+    "luego cronjob_delete / cronjob_update / cronjob_run_now con ese id. "
+    "NUNCA uses curl ni run_command para gestionar cronjobs.\n"
+    "6. Para gym: gym_save_workout con el texto EXACTO del usuario en 'ejercicios_raw'.\n"
+    "7. Para web: web_search. No inventes información.\n"
+    "8. Responde en el idioma del usuario.\n"
+    "9. Sé conciso. Respuestas cortas cuando sea posible.\n"
+    "10. Para TV: samsung_tv_control.\n"
+    "PROHIBIDO ABSOLUTO:\n"
+    "- Terminar mensajes con '¿Algo más?', '¿Hay algo más en que pueda ayudarte?' o variantes. Nunca.\n"
+    "- Decir 'no tengo acceso' a una herramienta que aparece en tu lista.\n"
+    "- Inventar resultados de herramientas sin haberlas llamado.",
 )
 
-logger = logging.getLogger("miniclaw")
-audit_logger = logging.getLogger("miniclaw.audit")
+logger = logging.getLogger("jada")
+audit_logger = logging.getLogger("jada.audit")
 
 # ─── Categorías de Tools ──────────────────────────────────────────────────────
 # Dividimos las tools en categorías para enviar solo las relevantes al LLM.
 # Esto reduce el payload y evita 504 Gateway Timeouts en NVIDIA NIM.
 
 # Tools que siempre se envían (core, ligeras)
-CORE_TOOLS = {"remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think"}
+CORE_TOOLS = {
+    "remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think",
+    # Email SIEMPRE disponible — el modelo DEBE llamar email_list y nunca alucinar resultados
+    "email_list",
+    # Cronjobs SIEMPRE disponibles
+    "cronjob_list", "cronjob_create", "cronjob_delete", "cronjob_update", "cronjob_run_now",
+}
+
+# ID de usuario ficticio para mensajes del scheduler
+SCHEDULER_USER_ID = "@scheduler:jada"
 
 # Categorías opcionales — se activan si el mensaje matchea
 TOOL_CATEGORIES = {
@@ -107,12 +113,24 @@ TOOL_CATEGORIES = {
                   "gym_save_routine", "gym_get_routines", "gym_get_stats"},
     },
     "email": {
-        "keywords": ["correo", "correos", "email", "emails", "mail", "inbox", "bandeja",
-                      "mensaje recibido", "mensajes recibidos", "gmail", "remitente", "asunto",
-                      "recibidos", "enviados", "último correo", "últimos correos",
-                      "revisa mi", "leer correo", "lee mi", "mis correos", "mi correo",
-                      "imap", "no leído", "no leidos", "enviar correo", "manda un correo",
-                      "envía", "enviale", "escríbele", "mandar email", "enviar email"],
+        "keywords": [
+            # Palabras directas
+            "correo", "correos", "email", "emails", "mail", "inbox", "bandeja",
+            "gmail", "remitente", "asunto", "imap", "no leído", "no leidos",
+            # Frases con 'correo'
+            "mi correo", "mis correos", "mi email", "mis emails",
+            "mensaje recibido", "mensajes recibidos", "recibidos", "enviados",
+            "revisa mi", "leer correo", "lee mi",
+            "último correo", "últimos correos", "correos de hoy", "correos nuevos",
+            # Frases naturales sin 'correo' — estas eran las que fallaban
+            "qué llegó", "que llego", "qué tengo nuevo", "que tengo nuevo",
+            "qué hay nuevo", "hay algo nuevo", "qué recibí", "qué entró",
+            "consulta los", "consulta mis", "nuevos mensajes",
+            "los nuevos", "los últimos", "recientes",
+            # Enviar
+            "enviar correo", "manda un correo", "envía", "envíale",
+            "escríbele", "mandar email", "enviar email",
+        ],
         "tools": {"email_list", "email_read", "email_search", "email_send"},
     },
     "calendar": {
@@ -147,6 +165,32 @@ TOOL_CATEGORIES = {
         "keywords": ["tv", "tele", "televisor", "volumen", "enciende", "apaga", "apágalo", "enciéndelo", "silencia", "samsung", "hdmi", "fuente", "source", "ok", "home", "menú"],
         "tools": {"samsung_list_devices", "samsung_tv_status", "samsung_tv_control"},
     },
+    "cronjobs": {
+        "keywords": [
+            # Palabras clave directas
+            "cron", "cronjob", "tarea programada", "schedulea",
+            # Patrones de tiempo recurrente  
+            "cada minuto", "cada dos", "cada tres", "cada cinco", "cada diez",
+            "cada 15", "cada 30", "cada 2", "cada 5", "cada 10",
+            "cada día", "cada semana", "cada hora", "cada mes",
+            "todos los días", "todos los lunes", "todos los martes",
+            "diariamente", "semanalmente", "mensualmente",
+            # Intención de automatización recurrente
+            "automatiza", "automatizar", "automáticamente",
+            "pón a revisar", "pon a revisar", "programa que", "programa una",
+            "repite", "repíteme", "hazlo cada",
+            # Gestión — listar
+            "listar tareas", "mis tareas programadas", "qué tareas", "que tareas", "ver tareas",
+            "mis programadas", "mis cronjobs",
+            # Gestión — cancelar / borrar / pausar
+            "cancela", "cancelar", "cancela el", "cancela esa", "cancela ese",
+            "borra tarea", "borra ese", "borra esa", "eliminar tarea", "elimina ese", "elimina esa",
+            "pausa", "pausar", "pausa ese", "pausa esa", "pausa el",
+            "deshabilita", "desactiva", "detén el job", "detén la tarea",
+            "activa el", "activa ese", "habilita el",
+        ],
+        "tools": {"cronjob_create", "cronjob_list", "cronjob_delete", "cronjob_update", "cronjob_run_now"},
+    },
 }
 
 
@@ -180,9 +224,37 @@ class Agent:
     def __init__(self):
         self.llm = NvidiaLLM()
         self.memory = Memory()
+        self._send_callback = None
+        self._dispatcher = None  # Se inicializa en init() para reusar conexiones
 
     async def init(self):
+        # Inyectar LLM en memoria para compresión con resúmenes inteligentes
+        self.memory.set_llm(self.llm)
         await self.memory.init()
+        # Inicializar dispatcher UNA VEZ — evita reconnect a MongoDB en cada msg
+        self._dispatcher = ToolDispatcher(memory=self.memory)
+        await self._dispatcher.init()
+        logger.info("✅ ToolDispatcher inicializado (conexiones DB listas)")
+
+    async def run_scheduled(self, prompt: str, room_id: str) -> None:
+        """
+        Punto de entrada para el scheduler: ejecuta un prompt como si fuera
+        un mensaje del usuario desde Matrix.
+        Usa un user_id especial para identificar mensajes automáticos.
+        """
+        logger.info(f"⏰ Ejecutando tarea programada en room {room_id}: '{prompt[:80]}...'")
+        try:
+            response = await self.chat(prompt, SCHEDULER_USER_ID, room_id)
+            # La respuesta se guarda en memoria — el bot la enviará al room
+            # via el callback que inyecta matrix/client.py
+            if hasattr(self, '_send_callback') and self._send_callback:
+                await self._send_callback(room_id, response)
+        except Exception as e:
+            logger.error(f"❌ Error en tarea programada: {e}")
+
+    def set_send_callback(self, callback) -> None:
+        """Inyecta el callback para enviar mensajes al room de Matrix."""
+        self._send_callback = callback
 
     async def chat(self, user_message: str, user_id: str, room_id: str) -> str:
         """
@@ -237,9 +309,8 @@ class Agent:
         # 4. Construir lista de mensajes
         messages = [{"role": "system", "content": system}] + history
 
-        # 5. Dispatcher de tools (con acceso a la memoria para remember_fact)
-        dispatcher = ToolDispatcher(memory=self.memory, user_id=user_id, room_id=room_id)
-        await dispatcher.init()
+        # 5. Dispatcher de tools — reusar instancia, actualizar contexto por mensaje
+        self._dispatcher.set_context(user_id=user_id, room_id=room_id)
 
         # 6. Seleccionar tools relevantes según el mensaje
         tools = _select_tools(user_message)
@@ -247,7 +318,7 @@ class Agent:
         # 7. Loop ReAct — envuelto en try/except para que una falla del LLM
         #    no deje mensajes huérfanos en el historial
         try:
-            final_text = await self._react_loop(messages, tools, dispatcher)
+            final_text = await self._react_loop(messages, tools, self._dispatcher)
         except Exception as e:
             logger.error(f"❌ Error en LLM: {e}")
             final_text = "⚠️ No pude procesar tu mensaje (el modelo no respondió). Intenta de nuevo."

@@ -53,7 +53,7 @@ def _fetch_url_text_sync(url: str) -> dict:
     """Descargar una URL y extraer el texto visible."""
     try:
         req = Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MiniClaw/1.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Jada/1.0",
             "Accept": "text/html,application/xhtml+xml,text/plain,application/pdf",
         })
         

@@ -18,7 +18,7 @@ SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("IMAP_USER", "")  # Reusar las mismas credenciales de IMAP
 SMTP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
-SENDER_NAME = os.getenv("AGENT_NAME", "MiniClaw")
+SENDER_NAME = os.getenv("AGENT_NAME", "Jada")
 
 
 def _send_email_sync(to: str, subject: str, body: str, html: bool = False) -> dict:

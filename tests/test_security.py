@@ -1,5 +1,5 @@
 """
-tests/test_security.py — Tests de seguridad para MiniClaw
+tests/test_security.py — Tests de seguridad para Jada
 
 Ejecutar: python -m pytest tests/test_security.py -v
 O sin pytest: python tests/test_security.py
@@ -294,7 +294,7 @@ def test_content_null_handling():
 async def run_all_tests():
     """Ejecutar todos los tests de seguridad."""
     print("=" * 60)
-    print("🛡️  TESTS DE SEGURIDAD — MiniClaw")
+    print("🛡️  TESTS DE SEGURIDAD — Jada")
     print("=" * 60)
 
     all_results = []

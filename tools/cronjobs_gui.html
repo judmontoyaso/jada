@@ -1,0 +1,855 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jada - Gestor de CronJobs</title>
+    <style>
+        :root {
+            --primary: #6c5ce7;
+            --primary-dark: #5849c4;
+            --secondary: #00b894;
+            --danger: #d63031;
+            --warning: #fdcb6e;
+            --dark: #2d3436;
+            --light: #dfe6e9;
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        /* Botones */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: var(--secondary);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: var(--dark);
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        /* Contenedor principal */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-card p {
+            color: var(--text-light);
+            font-size: 0.875rem;
+        }
+        
+        /* Tarjetas de Cronjobs */
+        .cronjobs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .cronjob-card {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .cronjob-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .cronjob-header {
+            padding: 1rem 1.5rem;
+            background: var(--light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .cronjob-header h3 {
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-active {
+            background: rgba(0, 184, 148, 0.2);
+            color: var(--secondary);
+        }
+        
+        .status-paused {
+            background: rgba(253, 203, 110, 0.2);
+            color: #d68910;
+        }
+        
+        .status-running {
+            background: rgba(108, 92, 231, 0.2);
+            color: var(--primary);
+        }
+        
+        .status-failed {
+            background: rgba(214, 48, 49, 0.2);
+            color: var(--danger);
+        }
+        
+        .cronjob-body {
+            padding: 1.5rem;
+        }
+        
+        .cronjob-info {
+            display: grid;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .cronjob-info-item {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .cronjob-info-item strong {
+            min-width: 100px;
+            color: var(--text-light);
+        }
+        
+        .cronjob-expression {
+            background: var(--dark);
+            color: #00cec9;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .cronjob-description {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+        
+        .cronjob-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .cronjob-actions .btn {
+            flex: 1;
+            justify-content: center;
+        }
+        
+        /* Logs */
+        .logs-container {
+            background: var(--dark);
+            color: #00cec9;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+        
+        .logs-container .log-entry {
+            padding: 0.25rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .logs-container .log-error {
+            color: var(--danger);
+        }
+        
+        .logs-container .log-success {
+            color: var(--secondary);
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        
+        .modal {
+            background: var(--card);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+        
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            font-size: 1.25rem;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-light);
+            transition: color 0.3s ease;
+        }
+        
+        .modal-close:hover {
+            color: var(--danger);
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--light);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-hint {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin-top: 0.25rem;
+        }
+        
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--light);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-light);
+        }
+        
+        .empty-state h2 {
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+        
+        .empty-state p {
+            margin-bottom: 2rem;
+        }
+        
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .toast {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .toast-success {
+            background: var(--secondary);
+        }
+        
+        .toast-error {
+            background: var(--danger);
+        }
+        
+        .toast-info {
+            background: var(--primary);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .cronjobs-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .modal {
+                width: 95%;
+                margin: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <h1>⏰ Jada CronJobs</h1>
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="openModal()">
+                ➕ Nuevo CronJob
+            </button>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="total-count">0</h3>
+                <p>Total CronJobs</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="active-count">0</h3>
+                <p>Activos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="paused-count">0</h3>
+                <p>Pausados</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="running-count">0</h3>
+                <p>Ejecutándose</p>
+            </div>
+        </div>
+        
+        <!-- CronJobs Grid -->
+        <div id="cronjobs-container" class="cronjobs-grid">
+            <!-- Se llenará dinámicamente -->
+        </div>
+        
+        <!-- Empty State -->
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <h2>📭 No hay CronJobs configurados</h2>
+            <p>Crea tu primer CronJob para comenzar a automatizar tareas</p>
+            <button class="btn btn-primary" onclick="openModal()">
+                ➕ Crear CronJob
+            </button>
+        </div>
+    </main>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Modal para crear/editar CronJob -->
+    <div id="modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">Crear Nuevo CronJob</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="cronjob-form" onsubmit="saveCronjob(event)">
+                    <input type="hidden" id="cronjob-id">
+                    
+                    <div class="form-group">
+                        <label for="cronjob-name">Nombre *</label>
+                        <input type="text" id="cronjob-name" required 
+                               placeholder="Ej: Noticias Diarias">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cronjob-expression">Expresión Cron *</label>
+                        <input type="text" id="cronjob-expression" required 
+                               placeholder="0 6 * * *"
+                               pattern="[0-9*/,\-]+\s+[0-9*/,\-]+\s+[0-9*/,\-]+\s+[0-9*/,\-]+\s+[0-9*/,\-]+">
+                        <p class="form-hint">Formato: minuto hora día mes día_semana (0 6 * * * = cada día a las 6:00 AM)</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cronjob-command">Comando a ejecutar *</label>
+                        <input type="text" id="cronjob-command" required 
+                               placeholder="python main.py --task noticias">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cronjob-description">Descripción</label>
+                        <textarea id="cronjob-description" 
+                                  placeholder="Describe qué hace este CronJob..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cronjob-enabled">
+                            <input type="checkbox" id="cronjob-enabled" checked>
+                            Habilitado (se ejecutará según programación)
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-warning" onclick="closeModal()">
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" onclick="document.getElementById('cronjob-form').requestSubmit()">
+                    💾 Guardar CronJob
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // API Base URL
+        const API_URL = 'http://localhost:8080/api/cronjobs';
+        
+        // Estado local
+        let cronjobs = [];
+        
+        // Cargar cronjobs al iniciar
+        document.addEventListener('DOMContentLoaded', loadCronjobs);
+        
+        // Funciones de API
+        async function apiRequest(endpoint, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            const response = await fetch(`${API_URL}${endpoint}`, options);
+            return response.json();
+        }
+        
+        // Cargar todos los cronjobs
+        async function loadCronjobs() {
+            try {
+                const result = await apiRequest('');
+                
+                if (result.status === 'success') {
+                    cronjobs = result.data;
+                    renderCronjobs();
+                    updateStats();
+                }
+            } catch (error) {
+                console.error('Error cargando cronjobs:', error);
+                showToast('Error cargando cronjobs', 'error');
+            }
+        }
+        
+        // Renderizar cronjobs
+        function renderCronjobs() {
+            const container = document.getElementById('cronjobs-container');
+            const emptyState = document.getElementById('empty-state');
+            
+            if (cronjobs.length === 0) {
+                container.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            container.style.display = 'grid';
+            emptyState.style.display = 'none';
+            
+            container.innerHTML = cronjobs.map(job => `
+                <div class="cronjob-card" data-id="${job.id}">
+                    <div class="cronjob-header">
+                        <h3>📌 ${escapeHtml(job.name)}</h3>
+                        <span class="status-badge status-${job.status}">${job.status}</span>
+                    </div>
+                    <div class="cronjob-body">
+                        <div class="cronjob-expression">${escapeHtml(job.expression)}</div>
+                        
+                        ${job.description ? `<div class="cronjob-description">${escapeHtml(job.description)}</div>` : ''}
+                        
+                        <div class="cronjob-info">
+                            <div class="cronjob-info-item">
+                                <strong>Comando:</strong>
+                                <code>${escapeHtml(job.command.substring(0, 50))}${job.command.length > 50 ? '...' : ''}</code>
+                            </div>
+                            <div class="cronjob-info-item">
+                                <strong>Última ejecución:</strong>
+                                ${job.last_run ? formatDate(job.last_run) : 'Nunca'}
+                            </div>
+                            <div class="cronjob-info-item">
+                                <strong>Próxima:</strong>
+                                ${job.next_run ? formatDate(job.next_run) : 'No programada'}
+                            </div>
+                        </div>
+                        
+                        <div class="cronjob-actions">
+                            <button class="btn btn-success btn-sm" onclick="runNow('${job.id}')">
+                                ▶️ Ejecutar
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="toggleEnabled('${job.id}')">
+                                ${job.enabled ? '⏸️ Pausar' : '▶️ Activar'}
+                            </button>
+                            <button class="btn btn-warning btn-sm" onclick="editCronjob('${job.id}')">
+                                ✏️ Editar
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCronjob('${job.id}')">
+                                🗑️ Eliminar
+                            </button>
+                        </div>
+                        
+                        ${job.output || job.error ? `
+                            <div class="logs-container">
+                                ${job.error ? `<div class="log-entry log-error">❌ ${escapeHtml(job.error.substring(0, 200))}</div>` : ''}
+                                ${job.output ? `<div class="log-entry log-success">✅ ${escapeHtml(job.output.substring(0, 200))}</div>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Actualizar estadísticas
+        function updateStats() {
+            document.getElementById('total-count').textContent = cronjobs.length;
+            document.getElementById('active-count').textContent = cronjobs.filter(j => j.status === 'active').length;
+            document.getElementById('paused-count').textContent = cronjobs.filter(j => j.status === 'paused').length;
+            document.getElementById('running-count').textContent = cronjobs.filter(j => j.status === 'running').length;
+        }
+        
+        // Modal functions
+        function openModal(job = null) {
+            const modal = document.getElementById('modal');
+            const title = document.getElementById('modal-title');
+            
+            if (job) {
+                title.textContent = 'Editar CronJob';
+                document.getElementById('cronjob-id').value = job.id;
+                document.getElementById('cronjob-name').value = job.name;
+                document.getElementById('cronjob-expression').value = job.expression;
+                document.getElementById('cronjob-command').value = job.command;
+                document.getElementById('cronjob-description').value = job.description || '';
+                document.getElementById('cronjob-enabled').checked = job.enabled;
+            } else {
+                title.textContent = 'Crear Nuevo CronJob';
+                document.getElementById('cronjob-form').reset();
+                document.getElementById('cronjob-id').value = '';
+            }
+            
+            modal.classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+        
+        // CRUD operations
+        async function saveCronjob(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('cronjob-id').value;
+            const data = {
+                name: document.getElementById('cronjob-name').value,
+                expression: document.getElementById('cronjob-expression').value,
+                command: document.getElementById('cronjob-command').value,
+                description: document.getElementById('cronjob-description').value,
+                enabled: document.getElementById('cronjob-enabled').checked
+            };
+            
+            try {
+                const result = await apiRequest(id ? `/${id}` : '', id ? 'PUT' : 'POST', data);
+                
+                if (result.status === 'success') {
+                    showToast(id ? 'CronJob actualizado' : 'CronJob creado', 'success');
+                    closeModal();
+                    loadCronjobs();
+                } else {
+                    showToast(result.message || 'Error guardando', 'error');
+                }
+            } catch (error) {
+                showToast('Error guardando cronjob', 'error');
+            }
+        }
+        
+        async function runNow(jobId) {
+            try {
+                const result = await apiRequest(`/${jobId}/run`, 'POST');
+                
+                if (result.status === 'success') {
+                    showToast('Ejecutando cronjob...', 'info');
+                    // Recargar después de 2 segundos
+                    setTimeout(loadCronjobs, 2000);
+                } else {
+                    showToast(result.message || 'Error ejecutando', 'error');
+                }
+            } catch (error) {
+                showToast('Error ejecutando cronjob', 'error');
+            }
+        }
+        
+        async function toggleEnabled(jobId) {
+            const job = cronjobs.find(j => j.id === jobId);
+            if (!job) return;
+            
+            try {
+                const result = await apiRequest(`/${jobId}`, 'PUT', {
+                    enabled: !job.enabled
+                });
+                
+                if (result.status === 'success') {
+                    showToast(job.enabled ? 'CronJob pausado' : 'CronJob activado', 'success');
+                    loadCronjobs();
+                } else {
+                    showToast('Error actualizando estado', 'error');
+                }
+            } catch (error) {
+                showToast('Error actualizando estado', 'error');
+            }
+        }
+        
+        async function deleteCronjob(jobId) {
+            if (!confirm('¿Estás seguro de eliminar este CronJob?')) return;
+            
+            try {
+                const result = await apiRequest(`/${jobId}`, 'DELETE');
+                
+                if (result.status === 'success') {
+                    showToast('CronJob eliminado', 'success');
+                    loadCronjobs();
+                } else {
+                    showToast('Error eliminando', 'error');
+                }
+            } catch (error) {
+                showToast('Error eliminando cronjob', 'error');
+            }
+        }
+        
+        function editCronjob(jobId) {
+            const job = cronjobs.find(j => j.id === jobId);
+            if (job) {
+                openModal(job);
+            }
+        }
+        
+        // Utility functions
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString('es-CO', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Auto-refresh cada 30 segundos
+        setInterval(loadCronjobs, 30000);
+    </script>
+</body>
+</html>

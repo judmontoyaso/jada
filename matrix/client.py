@@ -1,7 +1,7 @@
 """
 matrix/client.py — Bot de Matrix usando matrix-nio (async)
 Conecta al homeserver, escucha mensajes en los rooms configurados
-y los enrutá al agente MiniClaw.
+y los enrutá al agente Jada.
 
 Incluye: rate limiting, streaming de respuestas largas, cleanup de sesión.
 """
@@ -25,12 +25,12 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 HOMESERVER     = os.getenv("MATRIX_HOMESERVER", "https://matrix.org")
-BOT_USER       = os.getenv("MATRIX_USER", "@miniclaw:matrix.org")
+BOT_USER       = os.getenv("MATRIX_USER", "@jada:matrix.org")
 BOT_PASSWORD   = os.getenv("MATRIX_PASSWORD", "")
 ACCESS_TOKEN   = os.getenv("MATRIX_ACCESS_TOKEN", "")
 ROOM_IDS_RAW   = os.getenv("MATRIX_ROOM_IDS", "")
 ALLOWED_ROOMS  = set(r.strip() for r in ROOM_IDS_RAW.split(",") if r.strip())
-AGENT_NAME     = os.getenv("AGENT_NAME", "MiniClaw")
+AGENT_NAME     = os.getenv("AGENT_NAME", "Jada")
 
 # Retry config
 MAX_RETRY_DELAY = 60
@@ -52,8 +52,11 @@ class MatrixBot:
             config=AsyncClientConfig(max_limit_exceeded=0, max_timeouts=0),
         )
         self._start_token = None
-        # Rate limiting: {user_id: [timestamp, timestamp, ...]}
+        # Rate limiting: {user_id: [timestamp, ...]}
         self._user_timestamps = defaultdict(list)
+        # Deduplicación: event_ids ya procesados (evita doble respuesta si hay 2 instancias)
+        self._processed_events: set[str] = set()
+        self._MAX_PROCESSED = 500  # evitar memory leak en sesiones largas
 
     async def start(self):
         """Conectar al servidor Matrix e iniciar el loop de eventos con retry."""
@@ -63,7 +66,7 @@ class MatrixBot:
             # Usar access token directamente (sin necesidad de password)
             self.client.access_token = ACCESS_TOKEN
             self.client.user_id = BOT_USER
-            self.client.device_id = "MINICLAW"
+            self.client.device_id = "JADA"
             logger.info("✅ Conectado con access token.")
         else:
             # Fallback: login con contraseña
@@ -161,24 +164,67 @@ class MatrixBot:
             await self._send(room.room_id, "🗑️ Historial borrado.")
             return
 
-        logger.info(f"📨 [{room.room_id}] {event.sender}: {message[:80]}...")
+        logger.info(f"📨 [{room.room_id}] {event.sender}: {message[:80]}")
 
-        # Reacción ⏳ al recibir el mensaje
-        await self._react(room.room_id, event.event_id, "⏳")
+        # Deduplicar: ignorar si ya lo procesamos (protege contra doble instancia)
+        if event.event_id in self._processed_events:
+            logger.debug(f"Evento duplicado ignorado: {event.event_id}")
+            return
+        self._processed_events.add(event.event_id)
+        # Limpiar set si crece demasiado
+        if len(self._processed_events) > self._MAX_PROCESSED:
+            self._processed_events = set(list(self._processed_events)[-self._MAX_PROCESSED // 2:])
 
+        # Timeouts configurables
+        THINK_TIMEOUT   = int(os.getenv("JADA_THINK_TIMEOUT", "90"))   # seg máx para responder
+        NUDGE_AFTER     = int(os.getenv("JADA_NUDGE_AFTER",   "25"))   # seg antes de avisar
+
+        # Mensajes de progreso si tarda (humor negro incluído)
+        NUDGE_MSGS = [
+            "_Todavía estoy aquí, sólo pensando muy fuerte..._",
+            "_Procesando. Mi GPU imaginaria está ardiendo._",
+            "_Sigo viva. Esto está tardando más de lo normal._",
+        ]
+        import random as _rnd
+
+        async def _nudge():
+            """Avisa al usuario si la respuesta tarda demasiado."""
+            await asyncio.sleep(NUDGE_AFTER)
+            try:
+                await self._send(room.room_id, _rnd.choice(NUDGE_MSGS))
+            except Exception:
+                pass
+
+        nudge_task = asyncio.create_task(_nudge())
         try:
-            response = await self.agent.chat(
-                user_message=message,
-                user_id=event.sender,
-                room_id=room.room_id,
+            # Mostrar indicador "escribiendo..." mientras procesa
+            await self._set_typing(room.room_id, typing=True)
+            response = await asyncio.wait_for(
+                self.agent.chat(
+                    user_message=message,
+                    user_id=event.sender,
+                    room_id=room.room_id,
+                ),
+                timeout=THINK_TIMEOUT,
             )
-            # Reacción ✅ al completar
+            nudge_task.cancel()
             await self._react(room.room_id, event.event_id, "✅")
+        except asyncio.TimeoutError:
+            nudge_task.cancel()
+            logger.warning(f"⏱️ Timeout ({THINK_TIMEOUT}s) procesando mensaje de {event.sender}")
+            response = (
+                f"⚠️ Me trové pensando por más de {THINK_TIMEOUT}s y decidí rendirme. "
+                "La API de NIM está lenta hoy. Intenta de nuevo."
+            )
+            await self._react(room.room_id, event.event_id, "❌")
         except Exception as e:
+            nudge_task.cancel()
             logger.exception(f"Error en agente: {e}")
             response = f"⚠️ Error procesando tu mensaje: {str(e)}"
-            # Reacción ❌ en error
             await self._react(room.room_id, event.event_id, "❌")
+        finally:
+            # Siempre apagar el typing indicator
+            await self._set_typing(room.room_id, typing=False)
 
         await self._send(room.room_id, response)
 
@@ -207,6 +253,10 @@ class MatrixBot:
         """Aceptar invitaciones automáticamente."""
         logger.info(f"📩 Invitación a room {room.room_id}, aceptando...")
         await self.client.join(room.room_id)
+
+    async def send_message(self, room_id: str, text: str):
+        """Alias público de _send para uso externo (scheduler, tests)."""
+        await self._send(room_id, text)
 
     async def _send(self, room_id: str, text: str):
         """Enviar un mensaje de texto al room. Divide mensajes largos en chunks."""
@@ -257,6 +307,13 @@ class MatrixBot:
             chunks.append(text)
 
         return chunks
+
+    async def _set_typing(self, room_id: str, typing: bool, timeout: int = 30000):
+        """Enviar indicador de escritura ('escribiendo...') al room."""
+        try:
+            await self.client.room_typing(room_id, typing_state=typing, timeout=timeout)
+        except Exception as e:
+            logger.debug(f"No se pudo enviar typing indicator: {e}")
 
     async def _react(self, room_id: str, event_id: str, emoji: str):
         """Enviar una reacción emoji a un evento."""
