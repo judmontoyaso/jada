@@ -1,6 +1,6 @@
-"""
-Módulo de modelo de datos para CronJobs en MiniClaw
-Diseñado por: MiniMax-M2.1 (Agente Principal)
+﻿"""
+MÃ³dulo de modelo de datos para CronJobs en Jada
+DiseÃ±ado por: MiniMax-M2.1 (Agente Principal)
 Asistencia: Qwen3-VL-30B
 Fecha: 2026-02-26
 """
@@ -23,7 +23,7 @@ class Cronjob:
         self,
         id: str,
         name: str,
-        expression: str,  # Expresión cron: "0 6 * * *"
+        expression: str,  # ExpresiÃ³n cron: "0 6 * * *"
         command: str,      # Comando a ejecutar: "python main.py --task X"
         description: str = "",
         enabled: bool = True,
@@ -163,19 +163,19 @@ class CronjobManager:
             self.cronjobs = {}
 
 
-# Parser de expresiones cron (básico)
+# Parser de expresiones cron (bÃ¡sico)
 class CronParser:
-    """Parser básico de expresiones cron"""
+    """Parser bÃ¡sico de expresiones cron"""
     
     @staticmethod
     def parse(expression: str) -> Dict[str, List[int]]:
         """
-        Parsear expresión cron "minuto hora día mes día_semana"
+        Parsear expresiÃ³n cron "minuto hora dÃ­a mes dÃ­a_semana"
         Retorna diccionario con campos separados
         """
         parts = expression.split()
         if len(parts) != 5:
-            raise ValueError("Expresión cron debe tener 5 campos")
+            raise ValueError("ExpresiÃ³n cron debe tener 5 campos")
         
         return {
             "minute": CronParser._parse_field(parts[0], 0, 59),
@@ -203,7 +203,7 @@ class CronParser:
     
     @staticmethod
     def to_human_readable(expression: str) -> str:
-        """Convertir expresión cron a texto legible"""
+        """Convertir expresiÃ³n cron a texto legible"""
         parsed = CronParser.parse(expression)
         
         parts = []
@@ -237,11 +237,11 @@ if __name__ == "__main__":
         name="Noticias Diarias",
         expression="0 6 * * *",
         command="python main.py --task noticias",
-        description="Busca noticias cada mañana a las 6 AM"
+        description="Busca noticias cada maÃ±ana a las 6 AM"
     )
     
     print(f"Cronjob creado: {job.name}")
-    print(f"Expresión: {job.expression}")
+    print(f"ExpresiÃ³n: {job.expression}")
     print(f"Lectura humana: {CronParser.to_human_readable(job.expression)}")
     print("\nJSON:")
     print(job.to_json())
@@ -249,5 +249,5 @@ if __name__ == "__main__":
     # Probar el manager
     manager = CronjobManager("demo_cronjobs.json")
     manager.add(job)
-    print(f"\n✅ Guardado en {manager.storage_file}")
+    print(f"\nâœ… Guardado en {manager.storage_file}")
     print(f"Total cronjobs: {len(manager.list_all())}")

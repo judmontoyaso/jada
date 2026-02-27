@@ -1,4 +1,4 @@
-# 🤖 Jada — Personal AI Agent
+﻿# 🤖 Jada — Personal AI Agent
 
 Un agente de IA personal conectado a **Matrix/Element**, usando modelos de **NVIDIA NIM API** como LLM. Sigue el patrón **ReAct** (Reasoning + Acting) con memoria persistente, herramientas modulares y soporte multi-room.
 
@@ -197,7 +197,7 @@ NVIDIA_MODEL=minimaxai/minimax-m2.1
 
 # Matrix
 MATRIX_HOMESERVER=https://tu-servidor.com
-MATRIX_USER=@miniclaw:tu-servidor.com
+MATRIX_USER=@Jada:tu-servidor.com
 MATRIX_PASSWORD=tu-password
 MATRIX_ROOM_IDS=              # vacío = escuchar en todos los rooms
 

@@ -1,8 +1,8 @@
-# Política de Seguridad - MiniClaw
+﻿# Política de Seguridad - Jada
 
 ## 📋 Resumen
 
-MiniClaw es un asistente de IA con acceso a comandos del sistema. Esta documento describe las medidas de seguridad implementadas.
+Jada es un asistente de IA con acceso a comandos del sistema. Esta documento describe las medidas de seguridad implementadas.
 
 ## 🔒 Medidas de Protección
 

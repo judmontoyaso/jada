@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-Scheduler de CronJobs para MiniClaw
+Scheduler de CronJobs para Jada
 Agente: MiniMax-M2.1 (Principal)
 Asistente: Qwen3-VL-30B (UI Design)
 Fecha: 2026-02-26
@@ -16,7 +16,7 @@ from typing import Dict, Optional, Callable
 from tools.cronjobs_model import CronjobManager, CronjobStatus
 
 class CronjobScheduler:
-    """Scheduler que ejecuta cronjobs según su programación"""
+    """Scheduler que ejecuta cronjobs segÃºn su programaciÃ³n"""
     
     def __init__(self, storage_file: str = "cronjobs.json", interval: int = 30):
         """
@@ -37,7 +37,7 @@ class CronjobScheduler:
         os.makedirs(self.log_dir, exist_ok=True)
         
     def _log(self, job_id: str, message: str):
-        """Guardar log de ejecución"""
+        """Guardar log de ejecuciÃ³n"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log_file = os.path.join(self.log_dir, f"{job_id}.log")
         
@@ -50,17 +50,17 @@ class CronjobScheduler:
         if not cronjob:
             return
         
-        # Verificar si ya está ejecutándose
+        # Verificar si ya estÃ¡ ejecutÃ¡ndose
         if job_id in self.running_jobs:
-            self._log(job_id, "Ya está en ejecución, saltando...")
+            self._log(job_id, "Ya estÃ¡ en ejecuciÃ³n, saltando...")
             return
         
-        # Marcar como en ejecución
+        # Marcar como en ejecuciÃ³n
         cronjob.status = CronjobStatus.RUNNING.value
         cronjob.last_run = datetime.now()
         self.manager.save()
         
-        self._log(job_id, f"Iniciando ejecución: {cronjob.command}")
+        self._log(job_id, f"Iniciando ejecuciÃ³n: {cronjob.command}")
         
         try:
             # Ejecutar comando
@@ -90,7 +90,7 @@ class CronjobScheduler:
                     cronjob.status = CronjobStatus.FAILED.value
                     self._log(job_id, f"Error (exit code: {process.returncode})")
                 
-                # Limpiar de jobs en ejecución
+                # Limpiar de jobs en ejecuciÃ³n
                 if job_id in self.running_jobs:
                     del self.running_jobs[job_id]
                 
@@ -118,8 +118,8 @@ class CronjobScheduler:
     
     def _parse_cron_expression(self, expression: str) -> schedule.Job:
         """
-        Convertir expresión cron a schedule.Job
-        Nota: Esta es una implementación simplificada
+        Convertir expresiÃ³n cron a schedule.Job
+        Nota: Esta es una implementaciÃ³n simplificada
         """
         parts = expression.split()
         if len(parts) != 5:
@@ -127,23 +127,23 @@ class CronjobScheduler:
         
         minute, hour, day, month, weekday = parts
         
-        # Crear job schedule basado en la expresión
-        # Esta implementación usa la librería schedule
+        # Crear job schedule basado en la expresiÃ³n
+        # Esta implementaciÃ³n usa la librerÃ­a schedule
         job = None
         
         if minute == '*' and hour == '*' and day == '*' and month == '*' and weekday == '*':
             # Cada minuto
             job = schedule.every(1).minutes
         elif hour != '*' and minute != '*' and day == '*' and weekday == '*':
-            # Diario a hora específica
+            # Diario a hora especÃ­fica
             minute_val = int(minute) if minute != '*' else 0
             hour_val = int(hour) if hour != '*' else 6
             job = schedule.every(1).day.at(f"{hour_val:02d}:{minute_val:02d}")
         elif minute != '*' and hour == '*':
-            # Cada hora a minuto específico
+            # Cada hora a minuto especÃ­fico
             job = schedule.every(1).hour.at(f":{int(minute):02d}")
         else:
-            # Para expresiones más complejas, usar cada minuto como fallback
+            # Para expresiones mÃ¡s complejas, usar cada minuto como fallback
             # y verificar manualmente
             job = schedule.every(1).minutes
         
@@ -156,8 +156,8 @@ class CronjobScheduler:
         for cronjob in cronjobs:
             self._log(cronjob.id, f"Cargando cronjob: {cronjob.name}")
             
-            # Intentar parsear expresión y programar
-            # Por ahora, usar verificación cada minuto
+            # Intentar parsear expresiÃ³n y programar
+            # Por ahora, usar verificaciÃ³n cada minuto
             job = schedule.every(1).minutes
             
             # Almacenar job en estructura interna
@@ -188,7 +188,7 @@ class CronjobScheduler:
         self.scheduler_thread = threading.Thread(target=run_scheduler)
         self.scheduler_thread.start()
         
-        print(f"🚀 Scheduler iniciado. Monitoreando {len(self.manager.list_enabled())} cronjobs")
+        print(f"ðŸš€ Scheduler iniciado. Monitoreando {len(self.manager.list_enabled())} cronjobs")
     
     def stop(self):
         """Detener el scheduler"""
@@ -199,10 +199,10 @@ class CronjobScheduler:
             self.scheduler_thread.join(timeout=5)
         
         self._log("scheduler", "Scheduler detenido")
-        print("👋 Scheduler detenido")
+        print("ðŸ‘‹ Scheduler detenido")
     
     def add_callback(self, job_id: str, callback: Callable):
-        """Agregar callback para ejecutar después de cada job"""
+        """Agregar callback para ejecutar despuÃ©s de cada job"""
         self.execution_callbacks[job_id] = callback
     
     def run_job_now(self, job_id: str) -> bool:
@@ -239,15 +239,15 @@ def get_scheduler() -> CronjobScheduler:
 
 
 def main():
-    """Función principal para ejecutar scheduler como servicio"""
+    """FunciÃ³n principal para ejecutar scheduler como servicio"""
     import signal
     import sys
     
     scheduler = get_scheduler()
     
-    # Manejar señales de terminación
+    # Manejar seÃ±ales de terminaciÃ³n
     def signal_handler(sig, frame):
-        print("\n� received exit signal")
+        print("\nï¿½ received exit signal")
         scheduler.stop()
         sys.exit(0)
     
@@ -262,7 +262,7 @@ def main():
         while True:
             time.sleep(60)
             status = scheduler.get_status()
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Status: {status['enabled_cronjobs']} jobs activos, {status['running_jobs']} ejecutándose")
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Status: {status['enabled_cronjobs']} jobs activos, {status['running_jobs']} ejecutÃ¡ndose")
     except KeyboardInterrupt:
         scheduler.stop()
 

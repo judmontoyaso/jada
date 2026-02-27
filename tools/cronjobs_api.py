@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-API REST para gestión de CronJobs en MiniClaw
+API REST para gestiÃ³n de CronJobs en Jada
 Agente: MiniMax-M2.1 (Principal)
 Asistente: Qwen3-VL-30B (UI Design)
 Fecha: 2026-02-26
@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 # Importar modelo de datos
 from tools.cronjobs_model import Cronjob, CronjobManager, CronParser
 
-# Configuración
+# ConfiguraciÃ³n
 STORAGE_FILE = "cronjobs.json"
 PORT = 8080
 HOST = "0.0.0.0"
@@ -33,13 +33,13 @@ class CronjobAPI:
         
     def create_cronjob(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crear un nuevo cronjob"""
-        # Validar expresión cron
+        # Validar expresiÃ³n cron
         try:
             CronParser.parse(data.get("expression", "* * * * *"))
         except ValueError as e:
-            return {"status": "error", "message": f"Expresión cron inválida: {e}"}
+            return {"status": "error", "message": f"ExpresiÃ³n cron invÃ¡lida: {e}"}
         
-        # Generar ID único
+        # Generar ID Ãºnico
         job_id = f"cron-{int(time.time())}"
         
         # Crear cronjob
@@ -52,12 +52,12 @@ class CronjobAPI:
             enabled=data.get("enabled", True)
         )
         
-        # Calcular próxima ejecución
+        # Calcular prÃ³xima ejecuciÃ³n
         cronjob.next_run = self._calculate_next_run(cronjob.expression)
         
         # Guardar
         if self.manager.add(cronjob):
-            # Si está habilitado, registrar en crontab del sistema
+            # Si estÃ¡ habilitado, registrar en crontab del sistema
             if cronjob.enabled:
                 self._register_system_cron(cronjob)
             
@@ -89,13 +89,13 @@ class CronjobAPI:
             if field in data:
                 setattr(cronjob, field, data[field])
         
-        # Si cambió la expresión, recalcular próxima ejecución
+        # Si cambiÃ³ la expresiÃ³n, recalcular prÃ³xima ejecuciÃ³n
         if 'expression' in data:
             cronjob.next_run = self._calculate_next_run(data['expression'])
         
         cronjob.updated_at = datetime.now()
         
-        # Si cambió el estado de enabled, actualizar crontab del sistema
+        # Si cambiÃ³ el estado de enabled, actualizar crontab del sistema
         if 'enabled' in data:
             if data['enabled']:
                 self._register_system_cron(cronjob)
@@ -161,12 +161,12 @@ class CronjobAPI:
         
         return {
             "status": "success",
-            "message": f"Cronjob '{cronjob.name}' ejecutándose",
+            "message": f"Cronjob '{cronjob.name}' ejecutÃ¡ndose",
             "execution_id": job_id
         }
     
     def get_logs(self, job_id: str) -> Dict[str, Any]:
-        """Obtener logs de ejecución de un cronjob"""
+        """Obtener logs de ejecuciÃ³n de un cronjob"""
         cronjob = self.manager.get(job_id)
         if not cronjob:
             return {"status": "error", "message": "Cronjob no encontrado"}
@@ -182,9 +182,9 @@ class CronjobAPI:
         }
     
     def _calculate_next_run(self, expression: str) -> Optional[datetime]:
-        """Calcular próxima ejecución basándose en expresión cron"""
-        # Implementación básica - retorna None por ahora
-        # Una implementación completa usaría una librería como python-crontab
+        """Calcular prÃ³xima ejecuciÃ³n basÃ¡ndose en expresiÃ³n cron"""
+        # ImplementaciÃ³n bÃ¡sica - retorna None por ahora
+        # Una implementaciÃ³n completa usarÃ­a una librerÃ­a como python-crontab
         return None
     
     def _register_system_cron(self, cronjob: Cronjob):
@@ -203,7 +203,7 @@ class CronjobAPI:
             current_crontab = result.stdout if result.returncode == 0 else ""
             
             # Agregar nueva entrada
-            new_crontab = current_crontab + f"\n# MiniClaw CronJob: {cronjob.name}\n{cron_entry}\n"
+            new_crontab = current_crontab + f"\n# Jada CronJob: {cronjob.name}\n{cron_entry}\n"
             
             # Instalar nuevo crontab
             subprocess.run(
@@ -234,7 +234,7 @@ class CronjobAPI:
             skip = False
             
             for i, line in enumerate(lines):
-                if f"# MiniClaw CronJob" in line or f"# MiniClaw CronJob" in line:
+                if f"# Jada CronJob" in line or f"# Jada CronJob" in line:
                     skip = True
                     continue
                 if skip and line.strip().startswith('#'):
@@ -280,7 +280,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 "data": api.list_cronjobs()
             })
         elif path.startswith('/api/cronjobs/'):
-            # Obtener un cronjob específico o logs
+            # Obtener un cronjob especÃ­fico o logs
             parts = path.split('/')
             job_id = parts[-1]
             if parts[-2] == 'logs':
@@ -317,7 +317,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     self._send_json(400, result)
                     
             except json.JSONDecodeError:
-                self._send_json(400, {"status": "error", "message": "JSON inválido"})
+                self._send_json(400, {"status": "error", "message": "JSON invÃ¡lido"})
                 
         elif path.startswith('/api/cronjobs/'):
             # Ejecutar un cronjob ahora
@@ -351,7 +351,7 @@ class APIHandler(BaseHTTPRequestHandler):
                     self._send_json(404, result)
                     
             except json.JSONDecodeError:
-                self._send_json(400, {"status": "error", "message": "JSON inválido"})
+                self._send_json(400, {"status": "error", "message": "JSON invÃ¡lido"})
         else:
             self._send_json(404, {"status": "error", "message": "Endpoint no encontrado"})
     
@@ -380,8 +380,8 @@ class APIHandler(BaseHTTPRequestHandler):
 def run_server():
     """Iniciar el servidor API"""
     server = HTTPServer((HOST, PORT), APIHandler)
-    print(f"🚀 Servidor API de CronJobs ejecutándose en http://{HOST}:{PORT}")
-    print(f"📋 Endpoints disponibles:")
+    print(f"ðŸš€ Servidor API de CronJobs ejecutÃ¡ndose en http://{HOST}:{PORT}")
+    print(f"ðŸ“‹ Endpoints disponibles:")
     print(f"   GET    /api/cronjobs              - Listar todos")
     print(f"   GET    /api/cronjobs/<id>         - Obtener uno")
     print(f"   GET    /api/cronjobs/<id>/logs    - Ver logs")
@@ -393,7 +393,7 @@ def run_server():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n👋 Servidor detenido")
+        print("\nðŸ‘‹ Servidor detenido")
         server.shutdown()
 
 
