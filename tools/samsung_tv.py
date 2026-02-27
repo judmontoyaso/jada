@@ -24,12 +24,15 @@ def list_devices():
     """Lista todos los dispositivos disponibles"""
     if not SMARTTHINGS_TOKEN:
         return {"error": "SMARTTHINGS_TOKEN no configurado en .env"}
-    
+
     try:
         response = requests.get(
             f"{BASE_URL}/devices",
-            headers=get_headers()
+            headers=get_headers(),
+            timeout=10,
         )
+        if response.status_code != 200:
+            return {"error": f"SmartThings API error {response.status_code}: {response.text[:200]}"}
         return response.json()
     except Exception as e:
         return {"error": str(e)}
@@ -38,27 +41,31 @@ def list_devices():
 def get_device_id(device_name=None):
     """Obtiene el ID del dispositivo por nombre"""
     devices = list_devices()
-    
+
     if "error" in devices:
         return None
-    
+
     device_list = devices.get("items", [])
-    
+
     if not device_list:
         return None
-    
+
     if device_name:
         for device in device_list:
             if device_name.lower() in device.get("label", "").lower() or \
                device_name.lower() in device.get("name", "").lower() or \
                device_name == device.get("deviceId"):
                 return device.get("deviceId")
-    
-    # Si no se especifica nombre, devuelve el primer TV encontrado
+
+    # Buscar por tipo TV
+    tv_types = ["tv", "samsung tv", "samsung ocf tv", "samsung smart tv", "ocf"]
     for device in device_list:
-        if device.get("deviceTypeName", "").lower() in ["tv", "samsung tv", "samsung ocf tv"]:
+        device_type = device.get("deviceTypeName", "").lower()
+        device_label = device.get("label", "").lower()
+        if any(t in device_type or t in device_label for t in tv_types):
             return device.get("deviceId")
-    
+
+    # Fallback: devuelve el primer dispositivo disponible
     return device_list[0].get("deviceId") if device_list else None
 
 

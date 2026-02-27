@@ -4,6 +4,7 @@ Soporta Gmail con App Password. NO puede enviar, borrar ni modificar correos.
 """
 import imaplib
 import email
+import email.message
 import email.header
 import os
 import logging
@@ -72,17 +73,30 @@ def _connect() -> imaplib.IMAP4_SSL:
 
 
 def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
-    """Listar los últimos N correos de una carpeta."""
+    """Listar los últimos N correos de una carpeta, buscando por fecha reciente."""
     try:
         conn = _connect()
         conn.select(folder, readonly=True)
 
-        _, data = conn.search(None, "ALL")
+        # Buscar correos de los últimos 7 días primero
+        since_date = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
+        _, data = conn.search(None, f"(SINCE {since_date})")
         mail_ids = data[0].split()
 
-        # Tomar los últimos N
+        # Si no hay correos recientes, ampliar a 30 días
+        if not mail_ids:
+            since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+            _, data = conn.search(None, f"(SINCE {since_date})")
+            mail_ids = data[0].split()
+
+        # Si aún no hay nada, traer todos (fallback)
+        if not mail_ids:
+            _, data = conn.search(None, "ALL")
+            mail_ids = data[0].split()
+
+        # Tomar los últimos N (IDs más altos = más recientes en IMAP)
         recent_ids = mail_ids[-limit:] if len(mail_ids) > limit else mail_ids
-        recent_ids.reverse()  # Más recientes primero
+        recent_ids = list(reversed(recent_ids))  # Más recientes primero
 
         emails = []
         for mid in recent_ids:
@@ -109,7 +123,14 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
         conn.close()
         conn.logout()
 
-        return {"folder": folder, "emails": emails, "count": len(emails)}
+        now = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
+        return {
+            "folder": folder,
+            "emails": emails,
+            "count": len(emails),
+            "total_in_period": len(mail_ids),
+            "fetched_at": now,
+        }
     except Exception as e:
         return {"error": f"Error leyendo correos: {str(e)}"}
 

@@ -25,6 +25,13 @@ FALLBACK_MODELS = [
     "meta/llama-3.1-70b-instruct",
 ]
 
+# Thinking models requieren temperature=1.0 (recomendado por Moonshot AI / MiniMax)
+# Los modelos no-thinking usan 0.3 para respuestas más predecibles
+THINKING_MODELS = {"moonshotai/kimi-k2-thinking", "minimaxai/minimax-m2.1"}
+
+def _get_temperature(model_id: str) -> float:
+    return 1.0 if model_id in THINKING_MODELS else 0.5
+
 
 class NvidiaLLM:
     """
@@ -75,7 +82,7 @@ class NvidiaLLM:
                 kwargs = {
                     "model": model,
                     "messages": messages,
-                    "temperature": 0.3,
+                    "temperature": _get_temperature(model),
                     "max_tokens": 16384,
                 }
                 if tools:

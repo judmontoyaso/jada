@@ -28,7 +28,7 @@
 - **Frameworks:** Next.js, Flutter, FastAPI
 
 ## Proyectos
-- **MiniClaw** — Este asistente de IA personal
+- **jada** — Este asistente de IA personal
 - **OpenClaw** — Versión más grande/completa del asistente
 - Aplicaciones móviles con Flutter
 - Automatizaciones con n8n
