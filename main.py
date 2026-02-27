@@ -1,9 +1,12 @@
 """
 main.py — Punto de entrada de Jada
 
-Ejecutar:  python main.py
+Uso:
+  python main.py            → modo silencioso (solo banner, sin logs de consola)
+  python main.py --livelogs → modo verbose (logs completos en consola)
 """
 import asyncio
+import argparse
 import logging
 import os
 import sys
@@ -15,27 +18,48 @@ from agent.agent import Agent
 from matrix.client import MatrixBot
 from tools.dashboard import start_dashboard
 
-VERSION = "0.5.0"
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-
-logger = logging.getLogger("jada")
+VERSION = "0.5.1"
 
 
-def print_banner():
+def setup_logging(live_logs: bool) -> None:
+    """Configura el nivel de logging según el modo de ejecución."""
+    if live_logs:
+        # Modo verbose: todo en consola con formato completo
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+    else:
+        # Modo silencioso: solo WARNING+ en consola, todo a archivo de log
+        log_file = os.getenv("LOG_FILE", "jada.log")
+
+        # Handler de archivo (captura todo)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
+
+        # Handler de consola (solo errores críticos)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.ERROR)
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
+
+        logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+
+
+def print_banner(live_logs: bool = False) -> None:
     """Imprime el banner ASCII de Jada al iniciar el servidor."""
-    # Colores ANSI
-    CYAN = "\033[96m"
+    CYAN    = "\033[96m"
     MAGENTA = "\033[95m"
-    YELLOW = "\033[93m"
-    GREEN = "\033[92m"
-    DIM = "\033[2m"
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
+    YELLOW  = "\033[93m"
+    GREEN   = "\033[92m"
+    DIM     = "\033[2m"
+    BOLD    = "\033[1m"
+    RESET   = "\033[0m"
+
+    mode_label = f"{YELLOW}--livelogs{RESET}" if live_logs else f"{DIM}silencioso  (usa --livelogs para ver logs){RESET}"
 
     banner = f"""
 {CYAN}{BOLD}
@@ -54,26 +78,27 @@ def print_banner():
   {DIM}Model:{RESET}    {GREEN}{os.getenv("NVIDIA_MODEL", "N/A")}{RESET}
   {DIM}Matrix:{RESET}   {GREEN}{os.getenv("MATRIX_HOMESERVER", "N/A")}{RESET}
   {DIM}Dashboard:{RESET} {GREEN}http://localhost:8080{RESET}
+  {DIM}Modo:{RESET}     {mode_label}
 """
     print(banner)
 
 
-async def main():
-    print_banner()
+async def main(live_logs: bool = False) -> None:
+    logger = logging.getLogger("jada")
     logger.info("🚀 Iniciando Jada...")
 
-    # Inicializar agente (crea las tablas de SQLite si no existen)
+    # Inicializar agente
     agent = Agent()
     await agent.init()
     logger.info("✅ Agente inicializado (memoria lista)")
 
-    # Iniciar dashboard web (background thread)
+    # Iniciar dashboard web
     start_dashboard()
 
     # Iniciar bot de Matrix
     bot = MatrixBot(agent)
 
-    # Inyectar callback de envío de mensajes al agente (para el scheduler)
+    # Inicializar y arrancar scheduler
     from agent.scheduler import init_scheduler
     scheduler = init_scheduler(agent.run_scheduled)
     agent.set_send_callback(bot.send_message)
@@ -84,7 +109,28 @@ async def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Jada — Personal AI Agent",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Modos:
+  python main.py            → Modo silencioso (solo el banner, logs en jada.log)
+  python main.py --livelogs → Modo verbose (logs completos en consola)
+        """,
+    )
+    parser.add_argument(
+        "--livelogs",
+        action="store_true",
+        default=False,
+        help="Mostrar logs en tiempo real en la consola",
+    )
+    args = parser.parse_args()
+
+    setup_logging(args.livelogs)
+    print_banner(args.livelogs)
+
     try:
-        asyncio.run(main())
+        asyncio.run(main(args.livelogs))
     except KeyboardInterrupt:
-        logger.info("👋 Jada detenida.")
+        logging.getLogger("jada").info("👋 Jada detenida.")
+        print("\n  👋 Jada detenida.\n")

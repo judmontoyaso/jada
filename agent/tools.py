@@ -342,6 +342,11 @@ class ToolDispatcher:
         await self._gym.init()
         await self._notes.init()
 
+    def set_context(self, user_id: str, room_id: str) -> None:
+        """Actualiza el contexto por mensaje (user_id, room_id) sin reinicializar conexiones."""
+        self._user_id = user_id
+        self._room_id = room_id
+
     async def dispatch(self, tool_name: str, args: dict) -> str:
         """Ejecuta la tool solicitada y retorna el resultado como string JSON."""
         try:

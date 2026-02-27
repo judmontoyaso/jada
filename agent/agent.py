@@ -189,12 +189,17 @@ class Agent:
     def __init__(self):
         self.llm = NvidiaLLM()
         self.memory = Memory()
-        self._send_callback = None  # Callback para enviar mensajes al room
+        self._send_callback = None
+        self._dispatcher = None  # Se inicializa en init() para reusar conexiones
 
     async def init(self):
         # Inyectar LLM en memoria para compresión con resúmenes inteligentes
         self.memory.set_llm(self.llm)
         await self.memory.init()
+        # Inicializar dispatcher UNA VEZ — evita reconnect a MongoDB en cada msg
+        self._dispatcher = ToolDispatcher(memory=self.memory)
+        await self._dispatcher.init()
+        logger.info("✅ ToolDispatcher inicializado (conexiones DB listas)")
 
     async def run_scheduled(self, prompt: str, room_id: str) -> None:
         """
@@ -269,9 +274,8 @@ class Agent:
         # 4. Construir lista de mensajes
         messages = [{"role": "system", "content": system}] + history
 
-        # 5. Dispatcher de tools (con acceso a la memoria para remember_fact)
-        dispatcher = ToolDispatcher(memory=self.memory, user_id=user_id, room_id=room_id)
-        await dispatcher.init()
+        # 5. Dispatcher de tools — reusar instancia, actualizar contexto por mensaje
+        self._dispatcher.set_context(user_id=user_id, room_id=room_id)
 
         # 6. Seleccionar tools relevantes según el mensaje
         tools = _select_tools(user_message)
@@ -279,7 +283,7 @@ class Agent:
         # 7. Loop ReAct — envuelto en try/except para que una falla del LLM
         #    no deje mensajes huérfanos en el historial
         try:
-            final_text = await self._react_loop(messages, tools, dispatcher)
+            final_text = await self._react_loop(messages, tools, self._dispatcher)
         except Exception as e:
             logger.error(f"❌ Error en LLM: {e}")
             final_text = "⚠️ No pude procesar tu mensaje (el modelo no respondió). Intenta de nuevo."
