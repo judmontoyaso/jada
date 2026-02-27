@@ -1,5 +1,5 @@
 # =============================================
-#  MiniClaw — .gitignore
+#  Jada — .gitignore
 # =============================================
 
 # --- Python ---
@@ -17,32 +17,60 @@ build/
 venv/
 env/
 
-# --- Variables de entorno (contienen secretos) ---
+# ─── SECRETOS — NUNCA en git ─────────────────
 .env
+.env.*
+!.env.example     # sí subir el template sin valores reales
 
-# --- Bases de datos auto-generadas ---
+# ─── DATOS DE RUNTIME — se generan en el servidor ───────────────────────────
+# Bases de datos locales (memoria, notas, etc.)
 *.db
+*.sqlite
+*.sqlite3
 
-# --- Crypto store (E2EE keys, si se usa) ---
+# Estado del proceso
+jada.pid
+*.pid
+
+# Logs
+*.log
+logs/
+
+# Cronjobs: son datos de runtime, se crean/modifican mientras el bot corre.
+# En producción deberían estar en MongoDB — ver ARCHITECTURE.md
+cronjobs.json
+
+# Caché del scheduler / matrix session
+sync_token.json
+client_store/
 crypto_store/
+session.json
 
-# --- IDE ---
+# ─── ARCHIVOS QUE SÍ SUBEN A GIT ────────────────────────────────────────────
+# .agent/*.md  — soul, user, heartbeat, identity — son configuración del agente
+#               y se versiona junto con el código. ¡Estos SÍ van en git!
+# Ejemplo: .agent/soul.md, .agent/user.md, .agent/heartbeat.md
+
+# ─── IDE / OS ────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *.code-workspace
-
-# --- OS ---
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# --- Playwright ---
+# ─── Testing ────────────────────────────────────────────────────────────────
 playwright-report/
 test-results/
 
-# --- Archivos temporales ---
+# ─── Archivos temporales ─────────────────────────────────────────────────────
 *.tmp
-*.log
 _sample.json
+tmp/
+
+# ─── Node (dashboard) ────────────────────────────────────────────────────────
+node_modules/
+.next/
+.env.local
