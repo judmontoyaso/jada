@@ -19,9 +19,9 @@ logger = logging.getLogger("jada")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))
 
 # Modelos en orden de preferencia (failover)
-PRIMARY_MODEL = os.getenv("NVIDIA_MODEL", "moonshotai/kimi-k2-thinking")
+PRIMARY_MODEL = os.getenv("NVIDIA_MODEL", "minimaxai/minimax-m2.1")
 FALLBACK_MODELS = [
-    "minimaxai/minimax-m2.1",
+    "moonshotai/kimi-k2-thinking",
     "meta/llama-3.1-70b-instruct",
 ]
 

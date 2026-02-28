@@ -225,7 +225,8 @@ TOOL_SCHEMAS = [
     _fn("email_list",
         "Lista los últimos correos electrónicos del usuario (solo lectura). Muestra remitente, asunto y fecha.",
         {"folder": ("string", "Carpeta IMAP (default: INBOX)"),
-         "limit": ("integer", "Número de correos a retornar (default: 10)")}),
+         "limit": ("integer", "Número de correos a retornar (default: 10)"),
+         "only_new": ("boolean", "Si es true, solo retorna correos que no han sido listados antes")}),
 
     _fn("email_read",
         "Lee el contenido completo de un correo electrónico por su ID numérico.",
@@ -503,7 +504,11 @@ class ToolDispatcher:
 
             # Email
             case "email_list":
-                return await list_emails(args.get("folder", "INBOX"), args.get("limit", 10))
+                return await list_emails(
+                    args.get("folder", "INBOX"), 
+                    args.get("limit", 10), 
+                    args.get("only_new", False)
+                )
             case "email_read":
                 return await read_email(args["email_id"], args.get("folder", "INBOX"))
             case "email_search":

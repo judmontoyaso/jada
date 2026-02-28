@@ -49,7 +49,7 @@ class MatrixBot:
         self.client = AsyncClient(
             HOMESERVER,
             BOT_USER,
-            config=AsyncClientConfig(max_limit_exceeded=0, max_timeouts=0),
+            config=AsyncClientConfig(max_limit_exceeded=0, max_timeouts=0, store_sync_tokens=False),
         )
         self._start_token = None
         # Rate limiting: {user_id: [timestamp, ...]}

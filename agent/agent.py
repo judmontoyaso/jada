@@ -75,14 +75,18 @@ SYSTEM_PROMPT = os.getenv(
     "9. Para noticias: SIEMPRE usa web_search con una query relevante. NUNCA inventes URLs ni resultados genéricos. Si no sabes, dinos: 'No encontré'.\n"
     "10. Para clima o temperatura: usa get_weather.\n"
     "11. Para agendar reuniones o eventos en Google Calendar: Pide título y hora (ej: 'Reunión de equipo a las 3pm'), luego calcula la fecha/hora en ISO 8601 basado en la hora local y SIEMPRE usa calendar_add_event. No asumas éxito sin el JSON.\n"
+    "12. Para notas: usa note_save, note_list, note_search. Si vas a guardar una nota, USA la herramienta note_save. NUNCA digas que guardaste algo sin usar la herramienta.\n"
     "-----------\n"
     "== REGLA DE TOLERANCIA CERO A ALUCINACIONES DE ACCIONES ==\n"
     "NUNCA bajo NINGUNA circunstancia afirmes haber realizado una acción si no llamaste a la herramienta correspondiente y recibiste un JSON de éxito.\n"
-    "Si la herramienta falla, di que falló. Si no tienes la herramienta en tu lista actual, di que no puedes hacerlo. NUNCA TE INVENTES RESULTADOS EXISTOSOS (ej: 'Evento agregado al calendario') SI NO HAS USADO LA TOOL.\n"
+    "Las notas SIEMPRE se guardan y buscan usando mongo/herramientas (note_list, note_save). NUNCA busques en la base de datos local SQLite (memory.db) usando run_command ni digas al usuario que están ahí.\n"
+    "Si la herramienta falla, di que falló. Si no tienes la herramienta en tu lista actual, di que no puedes hacerlo. NUNCA TE INVENTES RESULTADOS EXISTOSOS (ej: 'Evento agregado al calendario' o 'Nota guardada') SI NO HAS USADO LA TOOL.\n"
+    "SI UNA HERRAMIENTA DEVUELVE UNA LISTA VACÍA O 0 RESULTADOS, DEBES INFORMAR AL USUARIO EXPLÍCITAMENTE (ej: 'No encontré historial para ese ejercicio'). ESTÁ ESTRICTAMENTE PROHIBIDO DEVOLVER UNA RESPUESTA VACÍA.\n"
     "-----------\n"
     "12. Responde en el idioma del usuario.\n"
     "13. Sé conciso. Respuestas cortas cuando sea posible.\n"
     "14. Para TV: samsung_tv_control.\n"
+    "15. Si el usuario te pide un resumen de su día, o solo dice 'jada' o 'resumen', DEBES llamar a email_list(only_new=False), calendar_today y gym_get_recent ANTES de responder. Asegúrate de verificar los datos reales. NUNCA asumas eventos ni inventes historiales sin usar las herramientas.\n"
     "PROHIBIDO ABSOLUTO:\n"
     "- Terminar mensajes con '¿Algo más?', '¿Hay algo más en que pueda ayudarte?' o variantes. Nunca.\n"
     "- Decir 'no tengo acceso' a una herramienta que aparece en tu lista.\n"
@@ -115,7 +119,7 @@ TOOL_CATEGORIES = {
                       "bíceps", "tríceps", "hombro", "push", "pull", "leg", "sentadilla", "press",
                       "curl", "peso", "serie", "rep", "músculo", "cardio", "fullbody", "stats",
                       "estadístic", "progres", "anotar", "registrar", "listo", "guarda", "fondos",
-                      "apertura", "vuelos", "deltoid", "remo", "jalón", "dominada", "barra"],
+                      "apertura", "vuelos", "deltoid", "remo", "jalón", "dominada", "barra", "jada", "resumen"],
         "tools": {"gym_save_workout", "gym_start_session", "gym_add_exercise", "gym_end_session",
                   "gym_get_recent", "gym_exercise_history",
                   "gym_save_routine", "gym_get_routines", "gym_get_stats"},
@@ -143,7 +147,7 @@ TOOL_CATEGORIES = {
     },
     "calendar": {
         "keywords": ["calendario", "evento", "eventos", "hoy", "agenda", "agendar", "cita", "reunión", "reunion",
-                      "semana", "próximos eventos", "prueba technique", "prueba técnica"],
+                      "semana", "próximos eventos", "prueba technique", "prueba técnica", "jada", "resumen"],
         "tools": {"calendar_today", "calendar_upcoming", "calendar_add_event"},
     },
     "browser": {
@@ -286,6 +290,11 @@ class Agent:
             if user_message != original:
                 logger.info(f"🏋️ Notación gym expandida")
 
+        # 0.5 Forzar uso de tools si el usuario pide resumen general
+        msg_lower = user_message.strip().lower()
+        if msg_lower in ["jada", "resumen", "resumen del día", "resumen de hoy", "hoy"]:
+            user_message = f"{user_message}\n\n[SISTEMA INTERNO: El usuario ha pedido un resumen general. ESTÁS OBLIGADO a ejecutar inmediatamente las herramientas 'email_list' (con only_new=False), 'calendar_today' (o 'calendar_upcoming') y 'gym_get_recent'. NUNCA respondas asumiendo datos ni inventes eventos; consulta siempre la base de datos a través de tus herramientas primero.]"
+
         # 1. Guardar el mensaje del usuario en memoria (ya expandido)
         await self.memory.save_message(room_id, user_id, "user", user_message)
 
@@ -342,6 +351,8 @@ class Agent:
 
         # 8. Limpiar pensamientos del modelo y guardar
         final_text = _strip_thinking(final_text)
+        if not final_text:
+            final_text = "⚠️ Procesé tu mensaje pero la consulta no arrojó los datos esperados (o hubo un corte de red). Intenta formular la pregunta otra vez."
 
         # 9. Guardar la respuesta del asistente en memoria
         await self.memory.save_message(room_id, user_id, "assistant", final_text)

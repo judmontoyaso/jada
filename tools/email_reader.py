@@ -72,7 +72,32 @@ def _connect() -> imaplib.IMAP4_SSL:
     return conn
 
 
-def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
+import json
+
+SEEN_EMAILS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "seen_emails.json")
+
+def _load_seen_emails() -> set:
+    """Cargar los IDs de correos ya notificados."""
+    if not os.path.exists(SEEN_EMAILS_FILE):
+        return set()
+    try:
+        with open(SEEN_EMAILS_FILE, "r") as f:
+            return set(json.load(f))
+    except Exception as e:
+        logger.error(f"Error leyendo seen_emails.json: {e}")
+        return set()
+
+def _save_seen_emails(seen: set) -> None:
+    """Guardar los IDs de correos ya notificados."""
+    try:
+        # Mantener solo los últimos 500 para que no crezca infinitamente
+        seen_list = list(seen)[-500:]
+        with open(SEEN_EMAILS_FILE, "w") as f:
+            json.dump(seen_list, f)
+    except Exception as e:
+        logger.error(f"Error guardando seen_emails.json: {e}")
+
+def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_new: bool = False) -> dict:
     """Listar los últimos N correos de una carpeta, buscando por fecha reciente."""
     try:
         conn = _connect()
@@ -94,12 +119,21 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
             _, data = conn.search(None, "ALL")
             mail_ids = data[0].split()
 
-        # Tomar los últimos N (IDs más altos = más recientes en IMAP)
+        seen_emails = _load_seen_emails() if only_new else set()
+
+        # Tomar los últimos N (IDs más altos = más recientes en IMAP) ANTES de filtrar
         recent_ids = mail_ids[-limit:] if len(mail_ids) > limit else mail_ids
         recent_ids = list(reversed(recent_ids))  # Más recientes primero
 
+        # Ahora filtramos los que ya hemos visto de ese lote más reciente
+        if only_new:
+            recent_ids = [mid for mid in recent_ids if mid.decode() not in seen_emails]
+
         emails = []
+        new_seen_emails = set(seen_emails)
+
         for mid in recent_ids:
+            mid_str = mid.decode()
             _, msg_data = conn.fetch(mid, "(RFC822.HEADER)")
             if not msg_data or not msg_data[0]:
                 continue
@@ -114,14 +148,20 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
                 parsed_date = date_str[:25]
 
             emails.append({
-                "id": mid.decode(),
+                "id": mid_str,
                 "from": _decode_header(msg.get("From", "")),
                 "subject": _decode_header(msg.get("Subject", "(sin asunto)")),
                 "date": parsed_date,
             })
+            
+            if only_new:
+                new_seen_emails.add(mid_str)
 
         conn.close()
         conn.logout()
+
+        if only_new and new_seen_emails:
+            _save_seen_emails(new_seen_emails)
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
         return {
@@ -225,10 +265,10 @@ def _search_emails_sync(query: str, folder: str = "INBOX", limit: int = 10) -> d
 
 # ─── Wrappers async (IMAP es síncrono, lo envolvemos con run_in_executor) ─────
 
-async def list_emails(folder: str = "INBOX", limit: int = 10) -> dict:
+async def list_emails(folder: str = "INBOX", limit: int = 10, only_new: bool = False) -> dict:
     """Listar los últimos N correos."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _list_emails_sync, folder, limit)
+    return await loop.run_in_executor(None, _list_emails_sync, folder, limit, only_new)
 
 
 async def read_email(email_id: str, folder: str = "INBOX") -> dict:
