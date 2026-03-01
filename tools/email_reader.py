@@ -101,27 +101,32 @@ def _connect() -> imaplib.IMAP4_SSL:
     return conn
 
 
-def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
+def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool = False) -> dict:
     """Listar los últimos N correos de una carpeta, buscando por fecha reciente."""
     try:
         conn = _connect()
         conn.select(folder, readonly=True)
 
-        # Buscar correos de los últimos 7 días primero
-        since_date = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
-        _, data = conn.search(None, f"(SINCE {since_date})")
-        mail_ids = data[0].split()
-
-        # Si no hay correos recientes, ampliar a 30 días
-        if not mail_ids:
-            since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+        if only_unseen:
+            # Buscar correos no leídos
+            _, data = conn.search(None, "UNSEEN")
+            mail_ids = data[0].split()
+        else:
+            # Buscar correos de los últimos 7 días primero
+            since_date = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
             _, data = conn.search(None, f"(SINCE {since_date})")
             mail_ids = data[0].split()
 
-        # Si aún no hay nada, traer todos (fallback)
-        if not mail_ids:
-            _, data = conn.search(None, "ALL")
-            mail_ids = data[0].split()
+            # Si no hay correos recientes, ampliar a 30 días
+            if not mail_ids:
+                since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+                _, data = conn.search(None, f"(SINCE {since_date})")
+                mail_ids = data[0].split()
+
+            # Si aún no hay nada, traer todos (fallback)
+            if not mail_ids:
+                _, data = conn.search(None, "ALL")
+                mail_ids = data[0].split()
 
         # Tomar los últimos N (IDs más altos = más recientes en IMAP)
         recent_ids = mail_ids[-limit:] if len(mail_ids) > limit else mail_ids
@@ -129,12 +134,25 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
 
         emails = []
         for mid in recent_ids:
-            _, msg_data = conn.fetch(mid, "(RFC822.HEADER)")
+            _, msg_data = conn.fetch(mid, "(RFC822.HEADER FLAGS)")
             if not msg_data or not msg_data[0]:
                 continue
 
-            raw = msg_data[0][1]
-            msg = email.message_from_bytes(raw)
+            # Extraer headers y flags
+            raw_headers = None
+            flags = ""
+            for item in msg_data:
+                if isinstance(item, tuple):
+                    raw_headers = item[1]
+                elif isinstance(item, bytes):
+                    # El formato de flags puede variar, tratamos de encontrarlo
+                    flags = item.decode(errors="ignore")
+
+            if not raw_headers:
+                continue
+
+            msg = email.message_from_bytes(raw_headers)
+            is_read = "\\Seen" in flags
 
             date_str = msg.get("Date", "")
             try:
@@ -147,6 +165,7 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
                 "from": _decode_header(msg.get("From", "")),
                 "subject": _decode_header(msg.get("Subject", "(sin asunto)")),
                 "date": parsed_date,
+                "is_read": is_read,
             })
 
         conn.close()
@@ -159,6 +178,7 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10) -> dict:
             "count": len(emails),
             "total_in_period": len(mail_ids),
             "fetched_at": now,
+            "only_unseen": only_unseen,
         }
     except Exception as e:
         return {"error": f"Error leyendo correos: {str(e)}"}
@@ -254,10 +274,10 @@ def _search_emails_sync(query: str, folder: str = "INBOX", limit: int = 10) -> d
 
 # ─── Wrappers async (IMAP es síncrono, lo envolvemos con run_in_executor) ─────
 
-async def list_emails(folder: str = "INBOX", limit: int = 10) -> dict:
+async def list_emails(folder: str = "INBOX", limit: int = 10, only_unseen: bool = False) -> dict:
     """Listar los últimos N correos."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _list_emails_sync, folder, limit)
+    return await loop.run_in_executor(None, _list_emails_sync, folder, limit, only_unseen)
 
 
 async def read_email(email_id: str, folder: str = "INBOX") -> dict:

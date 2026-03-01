@@ -14,7 +14,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 THINKING_MODEL = os.getenv("THINKING_MODEL", "minimaxai/minimax-m2.1")
-THINKING_TIMEOUT = int(os.getenv("THINKING_TIMEOUT", "90"))  # Más tiempo para pensar
+THINKING_TIMEOUT = int(os.getenv("THINKING_TIMEOUT", "180"))  # Más tiempo para pensar
 
 
 class DeepThinkAgent:

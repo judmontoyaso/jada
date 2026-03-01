@@ -25,7 +25,7 @@ class _HTMLTextExtractor(HTMLParser):
         super().__init__()
         self._text = []
         self._skip = False
-        self._skip_tags = {"script", "style", "noscript", "header", "footer", "nav", "aside"}
+        self._skip_tags = {"script", "style", "noscript", "footer", "aside"}
 
     def handle_starttag(self, tag, attrs):
         if tag in self._skip_tags:

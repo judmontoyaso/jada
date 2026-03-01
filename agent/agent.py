@@ -4,6 +4,7 @@ agent/agent.py — Loop principal del agente (Agno nativo)
 import os
 import re
 import logging
+import asyncio
 from datetime import date
 from pathlib import Path
 
@@ -90,6 +91,7 @@ class Agent:
         self._send_callback = None
         self.bot = bot
         self._tools = JadaTools(bot=self.bot)
+        self._session_locks: Dict[str, asyncio.Lock] = {}
         
         # SQLite DB automatically created/managed by Agno
         self._memory_db = SqliteDb(
@@ -150,6 +152,12 @@ class Agent:
             logger.error(f"❌ Error al borrar historial: {e}")
             return False
 
+    def _get_session_lock(self, session_id: str) -> asyncio.Lock:
+        """Obtiene o crea un lock de asyncio para una sesión específica."""
+        if session_id not in self._session_locks:
+            self._session_locks[session_id] = asyncio.Lock()
+        return self._session_locks[session_id]
+
     async def chat(self, user_message: str, user_id: str, room_id: str) -> str:
         """
         Punto de entrada principal. El Agno Agent maneja automáticamente
@@ -168,17 +176,20 @@ class Agent:
         self._tools.bot = self.bot
 
         # 3. Use room_id as the session_id to maintain context between the different chats.
-        try:
-            # Provide user facts programmatically in future iterations if required, 
-            # for now memory handles past raw conversation automatically.
-            response = await self.agent.arun(
-                user_message,
-                session_id=room_id
-            )
-            
-            final_text = self._strip_thinking(response.content)
-            return final_text or "..."
-            
-        except Exception as e:
-            logger.error(f"❌ Error en Agno Agent: {e}")
-            return "⚠️ Ocurrió un error al procesar tu solicitud."
+        # Use a lock to prevent concurrent LLM calls for the same session (interference between user and cron)
+        lock = self._get_session_lock(room_id)
+        async with lock:
+            try:
+                # Provide user facts programmatically in future iterations if required, 
+                # for now memory handles past raw conversation automatically.
+                response = await self.agent.arun(
+                    user_message,
+                    session_id=room_id
+                )
+                
+                final_text = self._strip_thinking(response.content)
+                return final_text or "..."
+                
+            except Exception as e:
+                logger.error(f"❌ Error en Agno Agent: {e}")
+                return "⚠️ Ocurrió un error al procesar tu solicitud."

@@ -363,9 +363,9 @@ class JadaTools(Toolkit):
         import json; return json.dumps(await self.notes_db.delete_note(self.user_id, note_id), ensure_ascii=False)
 
     # ── Email ──────────────────────────────────────────────────────────────────
-    async def email_list(self, folder: str = "INBOX", limit: int = 10) -> str:
-        """Lista los últimos correos electrónicos del usuario (solo lectura). Muestra remitente, asunto y fecha."""
-        import json; return json.dumps(await list_emails(folder, limit), ensure_ascii=False)
+    async def email_list(self, folder: str = "INBOX", limit: int = 10, unread_only: bool = False) -> str:
+        """Lista los últimos correos electrónicos del usuario (solo lectura). Muestra remitente, asunto y fecha. Usa unread_only=True para ver solo los no leídos."""
+        import json; return json.dumps(await list_emails(folder, limit, unread_only), ensure_ascii=False)
 
     async def email_read(self, email_id: str, folder: str = "INBOX") -> str:
         """Lee el contenido completo de un correo electrónico por su ID numérico."""
