@@ -108,16 +108,12 @@ async def main(live_logs: bool = False) -> None:
     logger = logging.getLogger("jada")
     logger.info("🚀 Iniciando Jada...")
 
-    # Inicializar agente
-    agent = Agent()
-    await agent.init()
-    logger.info("✅ Agente inicializado (memoria lista)")
-
+    # Iniciar bot de Matrix
+    bot = MatrixBot(Agent)
+    agent = bot.agent
+    
     # Iniciar dashboard web
     start_dashboard()
-
-    # Iniciar bot de Matrix
-    bot = MatrixBot(agent)
 
     # Inicializar y arrancar scheduler
     from agent.scheduler import init_scheduler

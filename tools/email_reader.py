@@ -40,6 +40,8 @@ def _decode_header(raw: str) -> str:
 def _get_body(msg: email.message.Message, max_chars: int = 3000) -> str:
     """Extraer el cuerpo de texto del email."""
     body = ""
+    html_body = ""
+    
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
@@ -51,13 +53,40 @@ def _get_body(msg: email.message.Message, max_chars: int = 3000) -> str:
                     break
                 except Exception:
                     continue
+            elif content_type == "text/html":
+                try:
+                    payload = part.get_payload(decode=True)
+                    charset = part.get_content_charset() or "utf-8"
+                    html_body = payload.decode(charset, errors="replace")
+                except Exception:
+                    continue
     else:
+        content_type = msg.get_content_type()
         try:
             payload = msg.get_payload(decode=True)
             charset = msg.get_content_charset() or "utf-8"
-            body = payload.decode(charset, errors="replace")
+            if content_type == "text/html":
+                html_body = payload.decode(charset, errors="replace")
+            else:
+                body = payload.decode(charset, errors="replace")
         except Exception:
             body = "(no se pudo decodificar el cuerpo)"
+
+    # Si no hay texto plano pero sí HTML, extraer texto del HTML
+    if not body and html_body:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_body, "lxml")
+            # Eliminar scripts y estilos
+            for script in soup(["script", "style"]):
+                script.extract()
+            # Obtener texto limpio
+            text = soup.get_text(separator="\n")
+            lines = (line.strip() for line in text.splitlines())
+            body = "\n".join(line for line in lines if line)
+        except Exception as e:
+            logger.warning(f"Error parseando HTML: {e}")
+            body = html_body[:max_chars]
 
     return body[:max_chars].strip()
 
