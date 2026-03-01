@@ -9,6 +9,7 @@ import asyncio
 import os
 import time
 import logging
+from typing import Any, Optional
 from collections import defaultdict
 from dotenv import load_dotenv
 from nio import (
@@ -44,8 +45,8 @@ MAX_MSG_LENGTH = int(os.getenv("MAX_MSG_LENGTH", "2000"))
 
 
 class MatrixBot:
-    def __init__(self, agent):
-        self.agent = agent
+    def __init__(self, agent_class):
+        self.agent = agent_class(bot=self)
         self.client = AsyncClient(
             HOMESERVER,
             BOT_USER,
@@ -160,7 +161,7 @@ class MatrixBot:
 
         # Comandos especiales
         if message.lower() in ["/clear", "!clear"]:
-            await self.agent.memory.clear_history(room.room_id, event.sender)
+            await self.agent.clear_history(room.room_id)
             await self._send(room.room_id, "🗑️ Historial borrado.")
             return
 
@@ -257,6 +258,66 @@ class MatrixBot:
     async def send_message(self, room_id: str, text: str):
         """Alias público de _send para uso externo (scheduler, tests)."""
         await self._send(room_id, text)
+
+    async def send_image(self, room_id: str, file_path: str, body: str = "image.png"):
+        """Sube y envía una imagen a un room de Matrix."""
+        try:
+            mxc_url = await self._upload_file(file_path)
+            if not mxc_url:
+                raise Exception("No se pudo obtener la URL MXC del archivo.")
+            
+            import os
+            from PIL import Image
+            
+            # Obtener dimensiones e info básica
+            with Image.open(file_path) as img:
+                width, height = img.size
+                size = os.path.getsize(file_path)
+            
+            content = {
+                "body": body,
+                "info": {
+                    "size": size,
+                    "mimetype": "image/png",
+                    "w": width,
+                    "h": height
+                },
+                "msgtype": "m.image",
+                "url": mxc_url
+            }
+            
+            await self.client.room_send(
+                room_id=room_id,
+                message_type="m.room.message",
+                content=content
+            )
+            logger.info(f"🖼️ Imagen enviada a {room_id}: {file_path}")
+        except Exception as e:
+            logger.error(f"❌ Error enviando imagen: {e}")
+            await self._send(room_id, f"⚠️ Error al enviar la imagen: {str(e)}")
+
+    async def _upload_file(self, file_path: str) -> str:
+        """Sube un archivo al homeserver y retorna su URL MXC."""
+        import magic
+        mime = magic.Magic(mime=True)
+        content_type = mime.from_file(file_path)
+        
+        with open(file_path, "rb") as f:
+            resp = await self.client.upload(
+                f,
+                content_type=content_type,
+                filename=os.path.basename(file_path)
+            )
+            
+        from nio import UploadResponse
+        # Fix: handle tuple (UploadResponse, Error) returned by some nio versions
+        actual_resp = resp[0] if isinstance(resp, tuple) else resp
+
+        if isinstance(actual_resp, UploadResponse):
+            return actual_resp.content_uri
+        else:
+            logger.error(f"Error subiendo archivo: {resp}")
+            return ""
 
     async def _send(self, room_id: str, text: str):
         """Enviar un mensaje de texto al room. Divide mensajes largos en chunks."""

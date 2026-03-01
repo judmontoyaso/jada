@@ -13,9 +13,15 @@ dist/
 build/
 
 # --- Entornos virtuales ---
-.venv/
-venv/
-env/
+.venv\
+.venv
+venv\
+venv
+env\
+env
+.env\
+.env
+# Note: we specifically ignore the directories to avoid tracking thousands of library files
 
 # ─── SECRETOS — NUNCA en git ─────────────────
 .env

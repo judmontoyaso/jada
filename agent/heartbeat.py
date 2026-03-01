@@ -147,11 +147,43 @@ async def run_heartbeat(llm, send_callback, room_id: str) -> None:
     # Generar mensaje con LLM (con soul + tono del heartbeat.md)
     try:
         prompt = _build_heartbeat_prompt(action, tone_text=config.get("tone_text", ""))
-        response = await llm.chat([
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": "go"},
-        ])
-        message = response.content
+        # If llm is an Agno model, we need to adapt
+        from agno.agent import Agent as AgnoAgent
+        from agno.models.nvidia import Nvidia
+        
+        # Determine if we got an Agno Agent or just a model
+        if isinstance(llm, AgnoAgent):
+            # If we passed the full agent
+            response = await llm.arun(prompt)
+            message = response.content
+        elif isinstance(llm, Nvidia) or hasattr(llm, "get_async_client"):
+            # It's an Agno Model
+            client = llm.get_async_client() if hasattr(llm, "get_async_client") else llm
+            try:
+                # Agno native client call
+                resp = await client.chat.completions.create(
+                    model=llm.id,
+                    messages=[
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": "go"},
+                    ]
+                )
+                message = resp.choices[0].message.content
+            except AttributeError:
+                # Fallback if it's the old NvidiaLLM wrapper (just in case)
+                resp = await llm.chat([
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": "go"},
+                ])
+                message = resp.content
+        else:
+            # Fallback
+            resp = await llm.chat([
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "go"},
+            ])
+            message = resp.content
+
         if message:
             message = re.sub(r'<think>.*?</think>', '', message, flags=re.DOTALL).strip()
     except Exception as e:

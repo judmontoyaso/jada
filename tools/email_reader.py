@@ -40,6 +40,8 @@ def _decode_header(raw: str) -> str:
 def _get_body(msg: email.message.Message, max_chars: int = 3000) -> str:
     """Extraer el cuerpo de texto del email."""
     body = ""
+    html_body = ""
+    
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
@@ -51,13 +53,40 @@ def _get_body(msg: email.message.Message, max_chars: int = 3000) -> str:
                     break
                 except Exception:
                     continue
+            elif content_type == "text/html":
+                try:
+                    payload = part.get_payload(decode=True)
+                    charset = part.get_content_charset() or "utf-8"
+                    html_body = payload.decode(charset, errors="replace")
+                except Exception:
+                    continue
     else:
+        content_type = msg.get_content_type()
         try:
             payload = msg.get_payload(decode=True)
             charset = msg.get_content_charset() or "utf-8"
-            body = payload.decode(charset, errors="replace")
+            if content_type == "text/html":
+                html_body = payload.decode(charset, errors="replace")
+            else:
+                body = payload.decode(charset, errors="replace")
         except Exception:
             body = "(no se pudo decodificar el cuerpo)"
+
+    # Si no hay texto plano pero sí HTML, extraer texto del HTML
+    if not body and html_body:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_body, "lxml")
+            # Eliminar scripts y estilos
+            for script in soup(["script", "style"]):
+                script.extract()
+            # Obtener texto limpio
+            text = soup.get_text(separator="\n")
+            lines = (line.strip() for line in text.splitlines())
+            body = "\n".join(line for line in lines if line)
+        except Exception as e:
+            logger.warning(f"Error parseando HTML: {e}")
+            body = html_body[:max_chars]
 
     return body[:max_chars].strip()
 
@@ -72,6 +101,7 @@ def _connect() -> imaplib.IMAP4_SSL:
     return conn
 
 
+<<<<<<< HEAD
 import json
 
 SEEN_EMAILS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "seen_emails.json")
@@ -98,26 +128,34 @@ def _save_seen_emails(seen: set) -> None:
         logger.error(f"Error guardando seen_emails.json: {e}")
 
 def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_new: bool = False) -> dict:
+=======
+def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool = False) -> dict:
+>>>>>>> origin/feature/migration-agno
     """Listar los últimos N correos de una carpeta, buscando por fecha reciente."""
     try:
         conn = _connect()
         conn.select(folder, readonly=True)
 
-        # Buscar correos de los últimos 7 días primero
-        since_date = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
-        _, data = conn.search(None, f"(SINCE {since_date})")
-        mail_ids = data[0].split()
-
-        # Si no hay correos recientes, ampliar a 30 días
-        if not mail_ids:
-            since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+        if only_unseen:
+            # Buscar correos no leídos
+            _, data = conn.search(None, "UNSEEN")
+            mail_ids = data[0].split()
+        else:
+            # Buscar correos de los últimos 7 días primero
+            since_date = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
             _, data = conn.search(None, f"(SINCE {since_date})")
             mail_ids = data[0].split()
 
-        # Si aún no hay nada, traer todos (fallback)
-        if not mail_ids:
-            _, data = conn.search(None, "ALL")
-            mail_ids = data[0].split()
+            # Si no hay correos recientes, ampliar a 30 días
+            if not mail_ids:
+                since_date = (datetime.now() - timedelta(days=30)).strftime("%d-%b-%Y")
+                _, data = conn.search(None, f"(SINCE {since_date})")
+                mail_ids = data[0].split()
+
+            # Si aún no hay nada, traer todos (fallback)
+            if not mail_ids:
+                _, data = conn.search(None, "ALL")
+                mail_ids = data[0].split()
 
         seen_emails = _load_seen_emails() if only_new else set()
 
@@ -133,13 +171,30 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_new: bool = F
         new_seen_emails = set(seen_emails)
 
         for mid in recent_ids:
+<<<<<<< HEAD
             mid_str = mid.decode()
             _, msg_data = conn.fetch(mid, "(RFC822.HEADER)")
+=======
+            _, msg_data = conn.fetch(mid, "(RFC822.HEADER FLAGS)")
+>>>>>>> origin/feature/migration-agno
             if not msg_data or not msg_data[0]:
                 continue
 
-            raw = msg_data[0][1]
-            msg = email.message_from_bytes(raw)
+            # Extraer headers y flags
+            raw_headers = None
+            flags = ""
+            for item in msg_data:
+                if isinstance(item, tuple):
+                    raw_headers = item[1]
+                elif isinstance(item, bytes):
+                    # El formato de flags puede variar, tratamos de encontrarlo
+                    flags = item.decode(errors="ignore")
+
+            if not raw_headers:
+                continue
+
+            msg = email.message_from_bytes(raw_headers)
+            is_read = "\\Seen" in flags
 
             date_str = msg.get("Date", "")
             try:
@@ -152,6 +207,7 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_new: bool = F
                 "from": _decode_header(msg.get("From", "")),
                 "subject": _decode_header(msg.get("Subject", "(sin asunto)")),
                 "date": parsed_date,
+                "is_read": is_read,
             })
             
             if only_new:
@@ -170,6 +226,7 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_new: bool = F
             "count": len(emails),
             "total_in_period": len(mail_ids),
             "fetched_at": now,
+            "only_unseen": only_unseen,
         }
     except Exception as e:
         return {"error": f"Error leyendo correos: {str(e)}"}
@@ -265,10 +322,17 @@ def _search_emails_sync(query: str, folder: str = "INBOX", limit: int = 10) -> d
 
 # ─── Wrappers async (IMAP es síncrono, lo envolvemos con run_in_executor) ─────
 
+<<<<<<< HEAD
 async def list_emails(folder: str = "INBOX", limit: int = 10, only_new: bool = False) -> dict:
     """Listar los últimos N correos."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _list_emails_sync, folder, limit, only_new)
+=======
+async def list_emails(folder: str = "INBOX", limit: int = 10, only_unseen: bool = False) -> dict:
+    """Listar los últimos N correos."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _list_emails_sync, folder, limit, only_unseen)
+>>>>>>> origin/feature/migration-agno
 
 
 async def read_email(email_id: str, folder: str = "INBOX") -> dict:

@@ -72,6 +72,7 @@ mdurl==0.1.2
 mmh3==5.2.0
 mpmath==1.3.0
 multidict==6.7.1
+<<<<<<< HEAD
 networkx==3.6.1
 numpy==2.4.2
 nvidia-cublas-cu12==12.8.4.1
@@ -91,6 +92,12 @@ nvidia-nvshmem-cu12==3.4.5
 nvidia-nvtx-cu12==12.8.90
 oauthlib==3.3.1
 onnxruntime==1.24.2
+=======
+networkx>=3.4.0
+numpy>=2.0.0
+oauthlib==3.3.1
+onnxruntime>=1.20.0
+>>>>>>> origin/feature/migration-agno
 openai==2.24.0
 opentelemetry-api==1.39.1
 opentelemetry-exporter-otlp-proto-common==1.39.1
@@ -126,7 +133,11 @@ pyproject_hooks==1.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 python-multipart==0.0.22
+<<<<<<< HEAD
 python-olm==3.2.16
+=======
+
+>>>>>>> origin/feature/migration-agno
 python-socks==2.8.1
 pytz==2025.2
 PyYAML==6.0.3
@@ -139,8 +150,13 @@ rpds-py==0.30.0
 rsa==4.9.1
 safetensors==0.7.0
 schedule==1.2.2
+<<<<<<< HEAD
 scikit-learn==1.8.0
 scipy==1.17.1
+=======
+scikit-learn>=1.5.0
+scipy>=1.14.0
+>>>>>>> origin/feature/migration-agno
 sentence-transformers==5.2.3
 setuptools==82.0.0
 shellingham==1.5.4
@@ -152,10 +168,17 @@ sympy==1.14.0
 tenacity==9.1.4
 threadpoolctl==3.6.0
 tokenizers==0.22.2
+<<<<<<< HEAD
 torch==2.10.0
 tqdm==4.67.3
 transformers==5.2.0
 triton==3.6.0
+=======
+torch>=2.0.0
+tqdm==4.67.3
+transformers==5.2.0
+
+>>>>>>> origin/feature/migration-agno
 typer==0.24.1
 typer-slim==0.24.0
 typing-inspection==0.4.2
@@ -164,7 +187,11 @@ unpaddedbase64==2.1.0
 uritemplate==4.2.0
 urllib3==2.6.3
 uvicorn==0.41.0
+<<<<<<< HEAD
 uvloop==0.22.1
+=======
+
+>>>>>>> origin/feature/migration-agno
 watchfiles==1.1.1
 websocket-client==1.9.0
 websockets==16.0

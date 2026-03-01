@@ -1,19 +1,19 @@
-# SmartThings TV Control
+﻿# SmartThings TV Control
 # Juan - MiniClaw
 
 param(
     [string]$Action = "on",
-    [string]$DeviceName = "TV"
+    [string]$DeviceName = "BRR"
 )
 
 # Cargar token desde .env
 $envPath = Join-Path $PSScriptRoot ".env"
 if (Test-Path $envPath) {
     Get-Content $envPath | Where-Object { $_ -match 'SMARTTHINGS_TOKEN=' } | ForEach-Object {
-        $script:Token = ($_ -split '=')[1].Trim()
+        $script:Token = 'fbce7a84-1bec-4156-b225-3a73969779c2'
     }
 }
-
+Write-Output "Token length:" $Token.Length
 if (-not $Token) {
     Write-Error "Token no encontrado en .env (SMARTTHINGS_TOKEN)"
     exit 1

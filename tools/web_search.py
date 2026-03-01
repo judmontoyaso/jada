@@ -1,18 +1,58 @@
 """
-tools/web_search.py — Búsqueda web usando DuckDuckGo (sin API key)
+tools/web_search.py — Búsqueda web robusta
+
+Primario: Brave Search API (si BRAVE_API_KEY está configurada)
+Fallback: DuckDuckGo (sin key, pero menos confiable) y Google News RSS
 """
-from ddgs import DDGS
+import os
+import asyncio
+import logging
+import httpx
+from typing import Optional
+
+logger = logging.getLogger("jada.websearch")
+
+BRAVE_API_KEY = os.getenv("BRAVE_API_KEY", "")
+BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
 
-async def search(query: str, max_results: int = 5, search_type: str = "text") -> dict:
-    """
-    Busca en la web usando DuckDuckGo y retorna una lista de resultados.
-    Si search_type="news", busca artículos de noticias recientes con fechas.
-    No requiere API key.
-    """
+async def _brave_search(query: str, max_results: int = 5) -> Optional[list]:
+    """Búsqueda usando Brave Search API."""
+    if not BRAVE_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                BRAVE_SEARCH_URL,
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip",
+                    "X-Subscription-Token": BRAVE_API_KEY,
+                },
+                params={"q": query, "count": max_results, "text_decorations": False},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            web_results = data.get("web", {}).get("results", [])
+            return [
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "snippet": r.get("description", ""),
+                }
+                for r in web_results[:max_results]
+            ]
+    except Exception as e:
+        logger.warning(f"Brave Search falló: {e}")
+        return None
+
+
+def _ddg_search(query: str, max_results: int = 5, search_type: str = "text") -> dict:
+    """Búsqueda usando DuckDuckGo (sin API key) y Google News RSS. Síncrona."""
     if "noticia" in query.lower() and search_type == "text":
         search_type = "news"
 
+    formatted = []
     try:
         if search_type == "news":
             import urllib.request
@@ -35,7 +75,6 @@ async def search(query: str, max_results: int = 5, search_type: str = "text") ->
                     xml_data = response.read()
                 root = ET.fromstring(xml_data)
                 
-                formatted = []
                 for item in root.findall(".//item")[:max_results]:
                     formatted.append({
                         "title": item.findtext("title", ""),
@@ -45,9 +84,10 @@ async def search(query: str, max_results: int = 5, search_type: str = "text") ->
                         "source": item.findtext("source", "")
                     })
             except Exception as e:
-                return {"error": f"Error leyendo Google News RSS: {str(e)}", "results": []}
-
+                logger.error(f"Error leyendo Google News RSS: {str(e)}")
+                return []
         else:
+            from duckduckgo_search import DDGS
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=max_results))
                 formatted = [
@@ -58,8 +98,37 @@ async def search(query: str, max_results: int = 5, search_type: str = "text") ->
                     }
                     for r in results
                 ]
-
-        return {"query": query, "type": search_type, "results": formatted, "count": len(formatted)}
-
+        return formatted
     except Exception as e:
-        return {"error": f"Error en búsqueda web: {str(e)}", "results": []}
+        logger.warning(f"DuckDuckGo/News falló: {e}")
+        return []
+
+
+async def search(query: str, max_results: int = 5, search_type: str = "text") -> dict:
+    """
+    Busca en la web. Intenta Brave primero, luego DuckDuckGo/News.
+    Retorna siempre la misma estructura.
+    """
+    engine = "brave" if BRAVE_API_KEY and search_type != "news" else "duckduckgo"
+
+    # Intentar Brave primero solo para búsquedas de texto
+    if BRAVE_API_KEY and search_type != "news":
+        results = await _brave_search(query, max_results)
+        if results:
+            return {"query": query, "results": results, "count": len(results), "engine": "brave"}
+        logger.warning("Brave falló, intentando DuckDuckGo...")
+
+    # Fallback a DuckDuckGo/Google News RSS (en thread para no bloquear el event loop)
+    results = await asyncio.get_event_loop().run_in_executor(
+        None, _ddg_search, query, max_results, search_type
+    )
+
+    if results:
+        return {"query": query, "results": results, "count": len(results), "engine": "duckduckgo_or_news"}
+
+    return {
+        "query": query,
+        "results": [],
+        "count": 0,
+        "error": f"Sin resultados. Motores intentados: {'brave, ' if BRAVE_API_KEY else ''}duckduckgo/news",
+    }

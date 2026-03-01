@@ -287,7 +287,8 @@ class JadaScheduler:
         try:
             if prompt == "__heartbeat__":
                 from agent.heartbeat import run_heartbeat
-                llm = getattr(self._agent, 'llm', None)
+                # In the new Agent wrapper, the model is inside self._agent.agent.model
+                llm = getattr(getattr(self._agent, 'agent', None), 'model', None)
                 send_cb = getattr(self._agent, '_send_callback', None)
                 await run_heartbeat(llm=llm, send_callback=send_cb, room_id=room_id)
             else:
