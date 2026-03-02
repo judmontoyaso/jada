@@ -67,25 +67,24 @@ SYSTEM_PROMPT = os.getenv(
     "2. NUNCA digas 'no tengo acceso a X' si la herramienta existe en tu lista. Si está en la lista, Úsala.\n"
     "3. Para correo: llamar email_list / email_read / email_search. Siempre.\n"
     "4. Para calendario: llamar calendar_today / calendar_upcoming. Siempre.\n"
-    "5. Para tareas programadas (cronjobs): FLUJO OBLIGATORIO: primero cronjob_list para obtener el job_id, "
-    "luego cronjob_delete / cronjob_update / cronjob_run_now con ese id.\n"
+    "5. Para tareas programadas (cronjobs): Puedes crearlas (cronjob_create) o listarlas (cronjob_list). Para modificar o borrar una, usa primero cronjob_list para obtener el job_id.\n"
     "6. Para gym: gym_save_workout con el texto EXACTO del usuario en 'ejercicios_raw'.\n"
     "8. Para enviar emails: usa email_send.\n"
     "9. Para noticias: SIEMPRE usa web_search con una query relevante. NUNCA inventes URLs ni resultados genéricos. Si no sabes, dinos: 'No encontré'.\n"
     "10. Para clima o temperatura: usa get_weather.\n"
     "11. Para agendar reuniones o eventos en Google Calendar: Pide título y hora (ej: 'Reunión de equipo a las 3pm'), luego calcula la fecha/hora en ISO 8601 basado en la hora local y SIEMPRE usa calendar_add_event. No asumas éxito sin el JSON.\n"
     "12. Para notas: usa note_save, note_list, note_search. Si vas a guardar una nota, USA la herramienta note_save. NUNCA digas que guardaste algo sin usar la herramienta.\n"
+    "13. Para recordatorios rápidos (ej: 'en 5 minutos'): USA SIEMPRE set_reminder(message='...', time='5 minutos'). Es tu herramienta principal para esto.\n"
     "-----------\n"
     "== REGLA DE TOLERANCIA CERO A ALUCINACIONES DE ACCIONES ==\n"
     "NUNCA bajo NINGUNA circunstancia afirmes haber realizado una acción si no llamaste a la herramienta correspondiente y recibiste un JSON de éxito.\n"
-    "Las notas SIEMPRE se guardan y buscan usando mongo/herramientas (note_list, note_save). NUNCA busques en la base de datos local SQLite (memory.db) usando run_command ni digas al usuario que están ahí.\n"
-    "Si la herramienta falla, di que falló. Si no tienes la herramienta en tu lista actual, di que no puedes hacerlo. NUNCA TE INVENTES RESULTADOS EXISTOSOS (ej: 'Evento agregado al calendario' o 'Nota guardada') SI NO HAS USADO LA TOOL.\n"
-    "SI UNA HERRAMIENTA DEVUELVE UNA LISTA VACÍA O 0 RESULTADOS, DEBES INFORMAR AL USUARIO EXPLÍCITAMENTE (ej: 'No encontré historial para ese ejercicio'). ESTÁ ESTRICTAMENTE PROHIBIDO DEVOLVER UNA RESPUESTA VACÍA.\n"
+    "Las notas y recordatorios SIEMPRE se gestionan usando herramientas. NUNCA busques en la base de datos local SQLite (memory.db) usando run_command ni digas al usuario que están ahí.\n"
+    "Si la herramienta falla, di que falló. Si no tienes la herramienta en tu lista actual, debe aparecer como 'set_reminder'. Úsala.\n"
     "-----------\n"
-    "12. Responde en el idioma del usuario.\n"
-    "13. Sé conciso. Respuestas cortas cuando sea posible.\n"
-    "14. Para TV: samsung_tv_control.\n"
-    "15. Si el usuario te pide un resumen de su día, o solo dice 'jada' o 'resumen', DEBES llamar a email_list(unread_only=False), calendar_today y gym_get_recent ANTES de responder. Asegúrate de verificar los datos reales. NUNCA asumas eventos ni inventes historiales sin usar las herramientas.\n"
+    "14. Responde en el idioma del usuario.\n"
+    "15. Sé conciso. Respuestas cortas cuando sea posible.\n"
+    "16. Para TV: samsung_tv_control.\n"
+    "17. Para recordatorios rápidos de una sola vez: USA set_reminder. Los cronjobs son para tareas recurrentes.\n"
     "PROHIBIDO ABSOLUTO:\n"
     "- Terminar mensajes con '¿Algo más?', '¿Hay algo más en que pueda ayudarte?' o variantes. Nunca.\n"
     "- Decir 'no tengo acceso' a una herramienta que aparece en tu lista.\n"
@@ -144,8 +143,9 @@ class Agent:
             model=self.chat_model,
             description=COMPLETE_INSTRUCTIONS,
             db=self._memory_db,
-            add_history_to_context=False, # Temp fix: NIM no permite imágenes en el contexto histórico fácilmente
-            num_history_messages=0,
+            add_history_to_context=True, 
+            num_history_messages=10,
+            tools=[self._tools], # Habilitar tools básicas para evitar "no tengo acceso"
             markdown=True
         )
 
@@ -154,8 +154,8 @@ class Agent:
             model=self.function_model,
             description=COMPLETE_INSTRUCTIONS,
             db=self._memory_db,
-            add_history_to_context=False, # Temp fix
-            num_history_messages=0,
+            add_history_to_context=True, 
+            num_history_messages=10,
             tools=[self._tools],
             markdown=True,
         )
@@ -165,8 +165,8 @@ class Agent:
             model=self.vision_model,
             description=COMPLETE_INSTRUCTIONS,
             db=self._memory_db,
-            add_history_to_context=False, # Temp fix: Solo 1 imagen por prompt permitida por NIM
-            num_history_messages=0,
+            add_history_to_context=True, 
+            num_history_messages=10,
             markdown=True
         )
 
@@ -254,7 +254,7 @@ class Agent:
                     logger.info(f"👁️ Usando agente de visión: {VISION_MODEL}")
                     target_agent = self.vision_agent
                     current_images = media_files[:1]
-                elif any(word in msg_lower for word in ["email", "correo", "agenda", "calendario", "nota", "tv", "gym", "entrenamiento", "entrenar"]):
+                elif any(word in msg_lower for word in ["email", "correo", "agenda", "calendario", "nota", "tv", "gym", "entrenamiento", "entrenar", "recordatorio", "recordar", "cronjob", "tarea"]):
                     logger.info(f"🛠️ Usando agente de funciones (Minimax): {FUNCTION_MODEL}")
                     target_agent = self.function_agent
                 else:

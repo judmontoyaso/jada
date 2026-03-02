@@ -118,8 +118,11 @@ async def main(live_logs: bool = False) -> None:
     # Inicializar y arrancar scheduler
     from agent.scheduler import init_scheduler
     from agent.heartbeat import run_heartbeat, _parse_heartbeat_config
+    from tools.reminders import reminder_manager
+
     scheduler = init_scheduler(agent.run_scheduled)
     agent.set_send_callback(bot.send_message)
+    reminder_manager.set_send_callback(bot.send_message)
     scheduler.set_agent(agent)   # ← heartbeat necesita llm + send_callback
     await scheduler.start()
     logger.info("✅ Scheduler de tareas programadas iniciado")

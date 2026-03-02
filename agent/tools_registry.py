@@ -410,16 +410,29 @@ class JadaTools(Toolkit):
         import json; return json.dumps(await deep_think(task, context), ensure_ascii=False)
 
     # ── Recordatorios ──────────────────────────────────────────────────────────
-    async def set_reminder(self, message: str, delay_seconds: int) -> str:
+    async def set_reminder(self, message: str, delay_seconds: Optional[int] = None, time: Optional[str] = None) -> str:
         """
-        Programa un recordatorio. Después del delay, se enviará un mensaje al chat.
+        Programa un recordatorio rápido. 
         
         Args:
-            message: Texto del recordatorio
-            delay_seconds: Segundos de espera. Ej: 300=5min, 3600=1hora
+            message: Mensaje del recordatorio.
+            delay_seconds: Segundos de espera (opcional si usas 'time').
+            time: Tiempo en texto (ej: '5 minutos', '1 hora', '30s').
         """
-        import json; return json.dumps(await reminder_manager.add_reminder(
-            message, delay_seconds, self.room_id or "unknown", self.user_id or "unknown"
+        import json
+        from tools.reminders import parse_time_expression
+        
+        seconds = delay_seconds
+        if time:
+            parsed = parse_time_expression(time)
+            if parsed:
+                seconds = parsed
+                
+        if seconds is None:
+            return json.dumps({"error": "Debes proporcionar 'delay_seconds' (int) o 'time' (str)."}, ensure_ascii=False)
+
+        return json.dumps(await reminder_manager.add_reminder(
+            message, seconds, self.room_id or "unknown", self.user_id or "unknown"
         ), ensure_ascii=False)
 
     async def list_reminders(self) -> str:
@@ -446,6 +459,7 @@ class JadaTools(Toolkit):
         import json
         import os
         
+        sched = get_scheduler()
         timezone = timezone or os.getenv("TIMEZONE", "UTC")
         if not sched:
             return json.dumps({"error": "Scheduler no inicializado. Reinicia Jada."}, ensure_ascii=False)

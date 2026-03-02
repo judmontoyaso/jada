@@ -139,6 +139,9 @@ def parse_time_expression(text: str) -> int | None:
     """
     text = text.lower().strip()
 
+    # Limpiar conectores como "en", "dentro de", "por"
+    text = re.sub(r'^(en\s+|dentro\s+de\s+|por\s+)', '', text)
+    
     # Patrón: "1h30m", "2h", "30m", "90s"
     match = re.match(r'^(\d+)\s*h(?:oras?)?\s*(?:(\d+)\s*m(?:in(?:utos?)?)?)?$', text)
     if match:
