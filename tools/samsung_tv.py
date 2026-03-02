@@ -9,7 +9,82 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SMARTTHINGS_TOKEN = os.getenv("SMARTTHINGS_TOKEN")
+SMARTTHINGS_CLIENT_ID = os.getenv("SMARTTHINGS_CLIENT_ID")
+SMARTTHINGS_CLIENT_SECRET = os.getenv("SMARTTHINGS_CLIENT_SECRET")
+SMARTTHINGS_REFRESH_TOKEN = os.getenv("SMARTTHINGS_REFRESH_TOKEN")
+
 BASE_URL = "https://api.smartthings.com/v1"
+TOKEN_URL = "https://api.smartthings.com/oauth/token"
+
+
+def refresh_smartthings_token():
+    """
+    Refresca el access token usando el refresh token.
+    Actualiza automáticamente el archivo .env con los nuevos valores.
+    """
+    global SMARTTHINGS_TOKEN, SMARTTHINGS_REFRESH_TOKEN
+    
+    if not all([SMARTTHINGS_CLIENT_ID, SMARTTHINGS_CLIENT_SECRET, SMARTTHINGS_REFRESH_TOKEN]):
+        return False
+
+    import base64
+    auth_str = f"{SMARTTHINGS_CLIENT_ID}:{SMARTTHINGS_CLIENT_SECRET}"
+    encoded_auth = base64.b64encode(auth_str.encode()).decode()
+
+    headers = {
+        "Authorization": f"Basic {encoded_auth}",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
+    data = {
+        "grant_type": "refresh_token",
+        "refresh_token": SMARTTHINGS_REFRESH_TOKEN
+    }
+
+    try:
+        response = requests.post(TOKEN_URL, headers=headers, data=data, timeout=15)
+        if response.status_code == 200:
+            tokens = response.json()
+            new_access = tokens.get("access_token")
+            new_refresh = tokens.get("refresh_token")
+            
+            if new_access:
+                _update_env_file("SMARTTHINGS_TOKEN", new_access)
+                SMARTTHINGS_TOKEN = new_access
+            
+            if new_refresh:
+                _update_env_file("SMARTTHINGS_REFRESH_TOKEN", new_refresh)
+                SMARTTHINGS_REFRESH_TOKEN = new_refresh
+                
+            return True
+    except Exception as e:
+        print(f"Error refrescando token: {e}")
+    return False
+
+
+def _update_env_file(key, value):
+    """Actualiza una variable en el archivo .env de forma segura."""
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, "r") as f:
+        lines = f.readlines()
+
+    found = False
+    new_lines = []
+    for line in lines:
+        if line.startswith(f"{key}="):
+            new_lines.append(f"{key}={value}\n")
+            found = True
+        else:
+            new_lines.append(line)
+    
+    if not found:
+        new_lines.append(f"{key}={value}\n")
+
+    with open(env_path, "w") as f:
+        f.writelines(new_lines)
 
 
 def get_headers():
@@ -31,6 +106,15 @@ def list_devices():
             headers=get_headers(),
             timeout=10,
         )
+        if response.status_code == 401:
+            # Token expirado, intentar refresco
+            if refresh_smartthings_token():
+                response = requests.get(
+                    f"{BASE_URL}/devices",
+                    headers=get_headers(),
+                    timeout=10,
+                )
+
         if response.status_code != 200:
             return {"error": f"SmartThings API error {response.status_code}: {response.text[:200]}"}
         return response.json()
@@ -137,6 +221,14 @@ def tv_control(action: str, device_name: str = None):
             json=payload
         )
         
+        if response.status_code == 401:
+            if refresh_smartthings_token():
+                response = requests.post(
+                    f"{BASE_URL}/devices/{device_id}/commands",
+                    headers=get_headers(),
+                    json=payload
+                )
+
         if response.status_code in [200, 202]:
             action_messages = {
                 "on": "encendido",

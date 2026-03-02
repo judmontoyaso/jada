@@ -5,15 +5,19 @@ import os
 import re
 import logging
 import asyncio
+import json
+import time
 from datetime import date
 from pathlib import Path
 
-from typing import Any
+from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 
 from agno.agent import Agent as AgnoAgent
 from agno.models.nvidia import Nvidia
+from agno.models.openai import OpenAIChat
 from agno.db.sqlite import SqliteDb
+from agno.media import Image as AgnoImage
 
 from agent.tools_registry import JadaTools
 from tools.gym_parser import expand_gym_notation
@@ -21,7 +25,9 @@ from tools.gym_parser import expand_gym_notation
 load_dotenv()
 
 AGENT_NAME = os.getenv("AGENT_NAME", "Jada")
-PRIMARY_MODEL = os.getenv("NVIDIA_MODEL", "moonshotai/kimi-k2-thinking")
+CHAT_MODEL = os.getenv("NVIDIA_CHAT_MODEL", "moonshotai/kimi-k2-thinking")
+FUNCTION_MODEL = os.getenv("NVIDIA_FUNCTION_MODEL", "minimax/minimax-m2.5")
+VISION_MODEL = os.getenv("NVIDIA_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))
 
 logger = logging.getLogger("jada")
@@ -49,6 +55,7 @@ def _load_identity_files() -> str:
         text = text[:MAX_IDENTITY_CHARS].rsplit("\n", 1)[0]
     return text
 
+# ─── System Prompt ───────────────────────────────────────────────────────────
 IDENTITY_CONTEXT = _load_identity_files()
 
 SYSTEM_PROMPT = os.getenv(
@@ -78,165 +85,24 @@ SYSTEM_PROMPT = os.getenv(
     "12. Responde en el idioma del usuario.\n"
     "13. Sé conciso. Respuestas cortas cuando sea posible.\n"
     "14. Para TV: samsung_tv_control.\n"
-    "15. Si el usuario te pide un resumen de su día, o solo dice 'jada' o 'resumen', DEBES llamar a email_list(only_new=False), calendar_today y gym_get_recent ANTES de responder. Asegúrate de verificar los datos reales. NUNCA asumas eventos ni inventes historiales sin usar las herramientas.\n"
+    "15. Si el usuario te pide un resumen de su día, o solo dice 'jada' o 'resumen', DEBES llamar a email_list(unread_only=False), calendar_today y gym_get_recent ANTES de responder. Asegúrate de verificar los datos reales. NUNCA asumas eventos ni inventes historiales sin usar las herramientas.\n"
     "PROHIBIDO ABSOLUTO:\n"
     "- Terminar mensajes con '¿Algo más?', '¿Hay algo más en que pueda ayudarte?' o variantes. Nunca.\n"
     "- Decir 'no tengo acceso' a una herramienta que aparece en tu lista.\n"
     "- Inventar resultados de herramientas sin haberlas llamado.",
 )
 
-<<<<<<< HEAD
-logger = logging.getLogger("jada")
-audit_logger = logging.getLogger("jada.audit")
+import pytz
+from datetime import datetime
 
-# ─── Categorías de Tools ──────────────────────────────────────────────────────
-# Dividimos las tools en categorías para enviar solo las relevantes al LLM.
-# Esto reduce el payload y evita 504 Gateway Timeouts en NVIDIA NIM.
+TIMEZONE = os.getenv("TIMEZONE", "UTC")
 
-# Tools que siempre se envían (core, ligeras)
-CORE_TOOLS = {
-    "remember_fact", "web_search", "run_command", "read_file", "write_file", "list_dir", "deep_think",
-    # Email SIEMPRE disponible — el modelo DEBE llamar email_list y nunca alucinar resultados
-    "email_list",
-    # Cronjobs SIEMPRE disponibles
-    "cronjob_list", "cronjob_create", "cronjob_delete", "cronjob_update", "cronjob_run_now",
-}
+def _get_current_time_str() -> str:
+    tz = pytz.timezone(TIMEZONE)
+    now = datetime.now(tz)
+    return now.strftime("%Y-%m-%d %H:%M:%S %Z")
 
-# ID de usuario ficticio para mensajes del scheduler
-SCHEDULER_USER_ID = "@scheduler:jada"
-
-# Categorías opcionales — se activan si el mensaje matchea
-TOOL_CATEGORIES = {
-    "gym": {
-        "keywords": ["gym", "entrena", "ejercicio", "workout", "rutina", "pecho", "pierna", "espalda",
-                      "bíceps", "tríceps", "hombro", "push", "pull", "leg", "sentadilla", "press",
-                      "curl", "peso", "serie", "rep", "músculo", "cardio", "fullbody", "stats",
-                      "estadístic", "progres", "anotar", "registrar", "listo", "guarda", "fondos",
-                      "apertura", "vuelos", "deltoid", "remo", "jalón", "dominada", "barra", "jada", "resumen"],
-        "tools": {"gym_save_workout", "gym_start_session", "gym_add_exercise", "gym_end_session",
-                  "gym_get_recent", "gym_exercise_history",
-                  "gym_save_routine", "gym_get_routines", "gym_get_stats"},
-    },
-    "email": {
-        "keywords": [
-            # Palabras directas
-            "correo", "correos", "email", "emails", "mail", "inbox", "bandeja",
-            "gmail", "remitente", "asunto", "imap", "no leído", "no leidos",
-            # Frases con 'correo'
-            "mi correo", "mis correos", "mi email", "mis emails",
-            "mensaje recibido", "mensajes recibidos", "recibidos", "enviados",
-            "revisa mi", "leer correo", "lee mi",
-            "último correo", "últimos correos", "correos de hoy", "correos nuevos",
-            # Frases naturales sin 'correo' — estas eran las que fallaban
-            "qué llegó", "que llego", "qué tengo nuevo", "que tengo nuevo",
-            "qué hay nuevo", "hay algo nuevo", "qué recibí", "qué entró",
-            "consulta los", "consulta mis", "nuevos mensajes",
-            "los nuevos", "los últimos", "recientes",
-            # Enviar
-            "enviar correo", "manda un correo", "envía", "envíale",
-            "escríbele", "mandar email", "enviar email",
-        ],
-        "tools": {"email_list", "email_read", "email_search", "email_send"},
-    },
-    "calendar": {
-        "keywords": ["calendario", "evento", "eventos", "hoy", "agenda", "agendar", "cita", "reunión", "reunion",
-                      "semana", "próximos eventos", "prueba technique", "prueba técnica", "jada", "resumen"],
-        "tools": {"calendar_today", "calendar_upcoming", "calendar_add_event"},
-    },
-    "browser": {
-        "keywords": ["browser", "navega", "abre", "página", "web", "url", "http",
-                      "scraping", "click", "formulario", "sitio"],
-        "tools": {"browser_navigate", "browser_get_text", "browser_click", "browser_fill"},
-    },
-    "summarize": {
-        "keywords": ["resume", "resumen", "resumir", "resumeme", "resúmeme", "summarize",
-                      "summary", "de qué trata", "qué dice", "artículo", "articulo",
-                      "página web", "blog", "leer página"],
-        "tools": {"summarize_url"},
-    },
-    "reminders": {
-        "keywords": ["recuérdame", "recordar", "recordatorio", "avísame", "avisa",
-                      "alarma", "timer", "temporizador", "en 5 min", "en 10 min",
-                      "en 30 min", "en 1 hora", "en una hora", "dentro de",
-                      "minutos", "después", "reminder"],
-        "tools": {"set_reminder", "list_reminders", "cancel_reminders"},
-    },
-    "notes": {
-        "keywords": ["nota", "notas", "note", "apunte", "guardar nota", "buscar nota"],
-        "tools": {"note_save", "note_list", "note_search", "note_delete"},
-    },
-    "weather": {
-        "keywords": ["clima", "tiempo", "temperatura", "lloverá", "lluvia", "grados", "weather", "sol", "pronóstico"],
-        "tools": {"get_weather"},
-    },
-    "tv": {
-        "keywords": ["tv", "tele", "televisor", "volumen", "enciende", "apaga", "apágalo", "enciéndelo", "silencia", "samsung", "hdmi", "fuente", "source", "ok", "home", "menú"],
-        "tools": {"samsung_list_devices", "samsung_tv_status", "samsung_tv_control"},
-    },
-    "cronjobs": {
-        "keywords": [
-            # Palabras clave directas
-            "cron", "cronjob", "tarea programada", "schedulea",
-            # Patrones de tiempo recurrente  
-            "cada minuto", "cada dos", "cada tres", "cada cinco", "cada diez",
-            "cada 15", "cada 30", "cada 2", "cada 5", "cada 10",
-            "cada día", "cada semana", "cada hora", "cada mes",
-            "todos los días", "todos los lunes", "todos los martes",
-            "diariamente", "semanalmente", "mensualmente",
-            # Intención de automatización recurrente
-            "automatiza", "automatizar", "automáticamente",
-            "pón a revisar", "pon a revisar", "programa que", "programa una",
-            "repite", "repíteme", "hazlo cada",
-            # Gestión — listar
-            "listar tareas", "mis tareas programadas", "qué tareas", "que tareas", "ver tareas",
-            "mis programadas", "mis cronjobs",
-            # Gestión — cancelar / borrar / pausar
-            "cancela", "cancelar", "cancela el", "cancela esa", "cancela ese",
-            "borra tarea", "borra ese", "borra esa", "eliminar tarea", "elimina ese", "elimina esa",
-            "pausa", "pausar", "pausa ese", "pausa esa", "pausa el",
-            "deshabilita", "desactiva", "detén el job", "detén la tarea",
-            "activa el", "activa ese", "habilita el",
-        ],
-        "tools": {"cronjob_create", "cronjob_list", "cronjob_delete", "cronjob_update", "cronjob_run_now"},
-    },
-}
-
-
-def _select_tools(message: str, history: list[dict] = None) -> list[dict]:
-    """
-    Selecciona solo las tools relevantes según el mensaje del usuario
-    Y los últimos mensajes del historial (para mantener contexto en follow-ups).
-    Siempre incluye las tools core + categorías que matchean por keywords.
-    """
-    msg_lower = message.lower()
-
-    # También analizar últimos 6 mensajes del historial para contexto
-    if history:
-        recent_texts = [m.get("content", "") or "" for m in history[-6:] if m.get("role") in ("user", "assistant")]
-        msg_lower = msg_lower + " " + " ".join(t.lower() for t in recent_texts)
-
-    active_tool_names = set(CORE_TOOLS)
-
-    for category, config in TOOL_CATEGORIES.items():
-        for keyword in config["keywords"]:
-            if keyword in msg_lower:
-                active_tool_names.update(config["tools"])
-                logger.debug(f"🔧 Categoría '{category}' activada por keyword '{keyword}'")
-                break
-
-    # Si no matcheó nada específico, enviar solo las core (conversación simple)
-    if active_tool_names == CORE_TOOLS:
-        logger.info(f"🔧 Conversación simple — solo {len(CORE_TOOLS)} tools core")
-
-    # Filtrar schemas
-    selected = [t for t in TOOL_SCHEMAS if t["function"]["name"] in active_tool_names]
-    logger.info(f"🔧 Tools seleccionadas: {len(selected)}/{len(TOOL_SCHEMAS)}")
-    return selected
-=======
-# Build the complete instructions
-COMPLETE_INSTRUCTIONS = f"{SYSTEM_PROMPT}\n\n{IDENTITY_CONTEXT}\n\nFecha actual: {date.today().isoformat()}"
->>>>>>> origin/feature/migration-agno
-
+COMPLETE_INSTRUCTIONS = f"{SYSTEM_PROMPT}\n\n{IDENTITY_CONTEXT}\n\nFecha y hora actual (Colombia): {_get_current_time_str()}"
 
 class Agent:
     """Wrapper para instanciar agno.agent.Agent e integrar el router de Matrix."""
@@ -252,18 +118,55 @@ class Agent:
             db_url="sqlite:///memory.db"
         )
         
-        self.agent = AgnoAgent(
-            model=Nvidia(
-                id=PRIMARY_MODEL,
-                api_key=os.getenv("NVIDIA_API_KEY"),
-                base_url=os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-                max_retries=1,
-            ),
+        # Instanciar modelos especializados
+        self.chat_model = Nvidia(
+            id=CHAT_MODEL,
+            api_key=os.getenv("NVIDIA_API_KEY"),
+            max_retries=1,
+            timeout=LLM_TIMEOUT,
+        )
+        self.function_model = Nvidia(
+            id=FUNCTION_MODEL,
+            api_key=os.getenv("NVIDIA_API_KEY_SECONDARY") or os.getenv("NVIDIA_API_KEY"),
+            max_retries=1,
+            timeout=LLM_TIMEOUT * 2, # Minimax suele tardar más procesando tools
+        )
+        self.vision_model = OpenAIChat(
+            id=VISION_MODEL,
+            api_key=os.getenv("NVIDIA_API_KEY"),
+            base_url="https://integrate.api.nvidia.com/v1",
+            max_retries=1,
+            timeout=LLM_TIMEOUT,
+        )
+
+        # 1. Agente de Charla (Kimi) - Enfocado en personalidad y rapidez
+        self.chat_agent = AgnoAgent(
+            model=self.chat_model,
             description=COMPLETE_INSTRUCTIONS,
             db=self._memory_db,
-            add_history_to_context=True,
-            num_history_messages=10,
+            add_history_to_context=False, # Temp fix: NIM no permite imágenes en el contexto histórico fácilmente
+            num_history_messages=0,
+            markdown=True
+        )
+
+        # 2. Agente de Funciones (Minimax) - Con herramientas habilitadas
+        self.function_agent = AgnoAgent(
+            model=self.function_model,
+            description=COMPLETE_INSTRUCTIONS,
+            db=self._memory_db,
+            add_history_to_context=False, # Temp fix
+            num_history_messages=0,
             tools=[self._tools],
+            markdown=True,
+        )
+
+        # 3. Agente de Visión (Llama) - Multimodal habilitado
+        self.vision_agent = AgnoAgent(
+            model=self.vision_model,
+            description=COMPLETE_INSTRUCTIONS,
+            db=self._memory_db,
+            add_history_to_context=False, # Temp fix: Solo 1 imagen por prompt permitida por NIM
+            num_history_messages=0,
             markdown=True
         )
 
@@ -311,7 +214,7 @@ class Agent:
             self._session_locks[session_id] = asyncio.Lock()
         return self._session_locks[session_id]
 
-    async def chat(self, user_message: str, user_id: str, room_id: str) -> str:
+    async def chat(self, user_message: str, user_id: str, room_id: str, images: Optional[list[str]] = None) -> str:
         """
         Punto de entrada principal. El Agno Agent maneja automáticamente
         el loop de ReAct, el RAG de memoria y los Tools.
@@ -323,162 +226,56 @@ class Agent:
             if user_message != original:
                 logger.info(f"🏋️ Notación gym expandida")
 
-<<<<<<< HEAD
-        # 0.5 Forzar uso de tools si el usuario pide resumen general
+        # 2. Forzar uso de tools si el usuario pide resumen general (Fix de HEAD)
         msg_lower = user_message.strip().lower()
         if msg_lower in ["jada", "resumen", "resumen del día", "resumen de hoy", "hoy"]:
-            user_message = f"{user_message}\n\n[SISTEMA INTERNO: El usuario ha pedido un resumen general. ESTÁS OBLIGADO a ejecutar inmediatamente las herramientas 'email_list' (con only_new=False), 'calendar_today' (o 'calendar_upcoming') y 'gym_get_recent'. NUNCA respondas asumiendo datos ni inventes eventos; consulta siempre la base de datos a través de tus herramientas primero.]"
+            user_message = f"{user_message}\n\n[SISTEMA INTERNO: El usuario ha pedido un resumen general. ESTÁS OBLIGADO a ejecutar inmediatamente las herramientas 'email_list' (con unread_only=False), 'calendar_today' (o 'calendar_upcoming') y 'gym_get_recent'. NUNCA respondas asumiendo datos ni inventes eventos; consulta siempre la base de datos a través de tus herramientas primero.]"
 
-        # 1. Guardar el mensaje del usuario en memoria (ya expandido)
-        await self.memory.save_message(room_id, user_id, "user", user_message)
-
-        # 2. Recuperar historial y hechos del usuario
-        history = await self.memory.get_history(room_id, user_id, limit=20)
-        facts = await self.memory.get_facts(user_id)
-
-        # 2.5 Sanitizar historial — eliminar mensajes user consecutivos sin respuesta
-        clean_history = []
-        for msg in history:
-            if msg["role"] == "user" and clean_history and clean_history[-1]["role"] == "user":
-                # Reemplazar el user anterior (no tiene respuesta)
-                clean_history[-1] = msg
-            else:
-                clean_history.append(msg)
-        
-        if len(clean_history) != len(history):
-            logger.info(f"🧹 Historial sanitizado: {len(history)} → {len(clean_history)} msgs")
-        history = clean_history
-
-        # 3. Construir el system prompt con contexto
-        facts_text = ""
-        if facts:
-            facts_str = "\n".join(f"  - {f}" for f in facts)
-            facts_text = f"\n\nLo que sé sobre ti:\n{facts_str}"
-
-        identity_text = ""
-        if IDENTITY_CONTEXT:
-            identity_text = f"\n\n{IDENTITY_CONTEXT}"
-
-        system = (
-            f"{SYSTEM_PROMPT}"
-            f"{identity_text}"
-            f"{facts_text}"
-            f"\n\nFecha actual: {date.today().isoformat()}"
-        )
-
-        # 4. Construir lista de mensajes
-        messages = [{"role": "system", "content": system}] + history
-
-        # 5. Dispatcher de tools — reusar instancia, actualizar contexto por mensaje
-        self._dispatcher.set_context(user_id=user_id, room_id=room_id)
-
-        # 6. Seleccionar tools relevantes según el mensaje
-        tools = _select_tools(user_message, history)
-
-        # 7. Loop ReAct — envuelto en try/except para que una falla del LLM
-        #    no deje mensajes huérfanos en el historial
-        try:
-            final_text = await self._react_loop(messages, tools, self._dispatcher)
-        except Exception as e:
-            logger.error(f"❌ Error en LLM: {e}")
-            final_text = "⚠️ No pude procesar tu mensaje (el modelo no respondió). Intenta de nuevo."
-
-        # 8. Limpiar pensamientos del modelo y guardar
-        final_text = _strip_thinking(final_text)
-        if not final_text:
-            final_text = "⚠️ Procesé tu mensaje pero la consulta no arrojó los datos esperados (o hubo un corte de red). Intenta formular la pregunta otra vez."
-
-        # 9. Guardar la respuesta del asistente en memoria
-        await self.memory.save_message(room_id, user_id, "assistant", final_text)
-
-        return final_text
-
-    async def _react_loop(
-        self, messages: list[dict], tools: list[dict], dispatcher: ToolDispatcher
-    ) -> str:
-        """Loop ReAct interno. Lanza excepción si el LLM falla."""
-        for iteration in range(MAX_ITERATIONS):
-            response = await self.llm.chat(messages, tools=tools)
-
-            # ¿El LLM quiere usar una o más tools?
-            if response.tool_calls:
-                # Añadir la respuesta del asistente (con tool_calls) al historial temporal
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content or None,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in response.tool_calls
-                    ],
-                })
-
-                # Ejecutar cada tool call y añadir sus resultados
-                for tool_call in response.tool_calls:
-                    tool_name = tool_call.function.name
-                    try:
-                        args = json.loads(tool_call.function.arguments)
-                    except json.JSONDecodeError:
-                        args = {}
-
-                    # Audit: medir tiempo de ejecución
-                    t0 = time.perf_counter()
-                    tool_result = await dispatcher.dispatch(tool_name, args)
-                    elapsed_ms = (time.perf_counter() - t0) * 1000
-
-                    # Audit log
-                    args_short = json.dumps(args, ensure_ascii=False)[:200]
-                    result_short = tool_result[:200]
-                    audit_logger.info(
-                        f"[TOOL] {tool_name}({args_short}) → {result_short} ({elapsed_ms:.0f}ms)"
-                    )
-
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": tool_result,
-                    })
-
-                    # Después de ejecutar un tool, expandir las tools disponibles
-                    if tool_name not in CORE_TOOLS:
-                        tools = TOOL_SCHEMAS
-
-                # Continuar el loop para que el LLM procese los resultados
-                continue
-
-            # ¿El LLM dio una respuesta final (sin tool calls)?
-            return response.content or "..."
-
-        # Si se agotaron las iteraciones
-        return "⚠️ Alcancé el límite de iteraciones. Intenta con algo más específico."
-=======
-        # 2. Inject context directly into JadaTools
+        # 3. Inject context directly into JadaTools
         self._tools.user_id = user_id
         self._tools.room_id = room_id
         self._tools.bot = self.bot
 
-        # 3. Use room_id as the session_id to maintain context between the different chats.
+        # 4. Use room_id as the session_id to maintain context between the different chats.
         # Use a lock to prevent concurrent LLM calls for the same session (interference between user and cron)
         lock = self._get_session_lock(room_id)
         async with lock:
             try:
-                # Provide user facts programmatically in future iterations if required, 
-                # for now memory handles past raw conversation automatically.
-                response = await self.agent.arun(
+                # Preparar contenido multimodal si hay imágenes
+                media_files = []
+                if images:
+                    for img_path in images:
+                        if os.path.exists(img_path):
+                            media_files.append(AgnoImage(filepath=img_path))
+
+                # Selección dinámica de agente especializado
+                current_images = None
+                if images:
+                    logger.info(f"👁️ Usando agente de visión: {VISION_MODEL}")
+                    target_agent = self.vision_agent
+                    current_images = media_files[:1]
+                elif any(word in msg_lower for word in ["email", "correo", "agenda", "calendario", "nota", "tv", "gym", "entrenamiento", "entrenar"]):
+                    logger.info(f"🛠️ Usando agente de funciones (Minimax): {FUNCTION_MODEL}")
+                    target_agent = self.function_agent
+                else:
+                    logger.info(f"✨ Usando agente de chat (Kimi): {CHAT_MODEL}")
+                    target_agent = self.chat_agent
+
+                logger.info(f"🚀 Ejecutando arun() con agente: {target_agent.model.id}, imágenes: {len(current_images) if current_images else 0}")
+                
+                response = await target_agent.arun(
                     user_message,
-                    session_id=room_id
+                    session_id=room_id,
+                    images=current_images
                 )
+                logger.info(f"📩 Respuesta de Agno ({target_agent.model.id}): {response.content[:100]}...")
                 
                 final_text = self._strip_thinking(response.content)
+                if not final_text:
+                    final_text = "⚠️ Procesé tu mensaje pero la consulta no arrojó los datos esperados (o hubo un corte de red). Intenta formular la pregunta otra vez."
+                
                 return final_text or "..."
                 
             except Exception as e:
                 logger.error(f"❌ Error en Agno Agent: {e}")
                 return "⚠️ Ocurrió un error al procesar tu solicitud."
->>>>>>> origin/feature/migration-agno

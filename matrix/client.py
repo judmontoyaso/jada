@@ -17,8 +17,10 @@ from nio import (
     AsyncClientConfig,
     LoginResponse,
     RoomMessageText,
+    RoomMessageImage,
     InviteEvent,
     MegolmEvent,
+    DownloadResponse,
 )
 
 load_dotenv()
@@ -53,6 +55,7 @@ class MatrixBot:
             config=AsyncClientConfig(max_limit_exceeded=0, max_timeouts=0, store_sync_tokens=False),
         )
         self._start_token = None
+        self._start_time = time.time()
         # Rate limiting: {user_id: [timestamp, ...]}
         self._user_timestamps = defaultdict(list)
         # Deduplicación: event_ids ya procesados (evita doble respuesta si hay 2 instancias)
@@ -76,18 +79,29 @@ class MatrixBot:
                 raise RuntimeError(f"❌ Login fallido: {resp}")
             logger.info(f"✅ Conectado con password. Device ID: {self.client.device_id}")
 
-        # Sync inicial para ignorar msgs históricos
-        await self.client.sync(timeout=0)
-        self._start_token = self.client.next_batch
+        # Registrar callbacks antes del sync inicial para no perder mensajes nuevos
+        self.client.add_event_callback(self._on_message, RoomMessageText)
+        self.client.add_event_callback(self._on_image, RoomMessageImage)
+        self.client.add_event_callback(self._on_invite, InviteEvent)
+        self.client.add_event_callback(self._on_megolm, MegolmEvent)
+        
+        # RoomMessageImage was used in my last view, let's stick to RoomMessageImage
+        
+        # Log joined rooms
+        rooms = self.client.rooms
+        logger.info(f"🏘️ Rooms unidos: {list(rooms.keys())}") if rooms else logger.info("🏘️ No estoy en ningún room.")
 
         # Conectar el sistema de recordatorios al chat
         from tools.reminders import reminder_manager
         reminder_manager.set_send_callback(self._send)
 
-        # Registrar callbacks
-        self.client.add_event_callback(self._on_message, RoomMessageText)
-        self.client.add_event_callback(self._on_invite, InviteEvent)
-        self.client.add_event_callback(self._on_megolm, MegolmEvent)
+        # Sync inicial
+        await self.client.sync(timeout=0)
+        self._start_token = self.client.next_batch
+        
+        # Log joined rooms
+        rooms = self.client.rooms
+        logger.info(f"🏘️ Rooms unidos: {list(rooms.keys())}") if rooms else logger.info("🏘️ No estoy en ningún room.")
 
         logger.info(f"👂 Escuchando en rooms: {ALLOWED_ROOMS or 'todos'}")
 
@@ -134,6 +148,51 @@ class MatrixBot:
 
         self._user_timestamps[user_id].append(now)
         return True
+
+    async def _on_image(self, room, event: RoomMessageImage):
+        """Callback para imágenes nuevas."""
+        # Ignorar mensajes de antes del inicio
+        if self._start_token and event.server_timestamp < self._get_start_ms():
+            return
+        if event.sender == BOT_USER:
+            return
+        if ALLOWED_ROOMS and room.room_id not in ALLOWED_ROOMS:
+            return
+
+        logger.info(f"🖼️ [{room.room_id}] {event.sender} envió una imagen: {event.body}")
+
+        # Crear carpeta temporal para descargas si no existe
+        tmp_dir = "/tmp/jada_images"
+        os.makedirs(tmp_dir, exist_ok=True)
+        
+        file_path = os.path.join(tmp_dir, f"{event.event_id}_{event.body}")
+        
+        try:
+            # Descargar la imagen
+            resp = await self.client.download(event.url)
+            if isinstance(resp, DownloadResponse):
+                with open(file_path, "wb") as f:
+                    f.write(resp.body)
+                
+                logger.info(f"✅ Imagen descargada en: {file_path}")
+                
+                # Procesar con el agente
+                await self._set_typing(room.room_id, typing=True)
+                response = await self.agent.chat(
+                    user_message=event.body or "Analiza esta imagen",
+                    user_id=event.sender,
+                    room_id=room.room_id,
+                    images=[file_path]
+                )
+                await self._send(room.room_id, response)
+                await self._react(room.room_id, event.event_id, "👀")
+            else:
+                logger.error(f"❌ Error descargando imagen: {resp}")
+        except Exception as e:
+            logger.exception(f"Error procesando imagen: {e}")
+            await self._send(room.room_id, f"⚠️ Error al procesar la imagen: {str(e)}")
+        finally:
+            await self._set_typing(room.room_id, typing=False)
 
     async def _on_message(self, room, event: RoomMessageText):
         """Callback para mensajes nuevos en rooms."""
@@ -395,7 +454,7 @@ class MatrixBot:
 
     def _get_start_ms(self) -> int:
         """Timestamp en ms de cuando arrancó el bot."""
-        return int(time.time() * 1000) - 60_000  # 1 minuto de gracia
+        return int(self._start_time * 1000) - 60_000  # 1 minuto de gracia
 
 
 def _markdown_to_html(text: str) -> str:

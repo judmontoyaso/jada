@@ -9,6 +9,7 @@ import email.header
 import os
 import logging
 import asyncio
+import json
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from dotenv import load_dotenv
@@ -22,6 +23,7 @@ IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
 IMAP_USER = os.getenv("IMAP_USER", "")
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
 
+SEEN_EMAILS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "seen_emails.json")
 
 def _decode_header(raw: str) -> str:
     """Decodificar encabezado de email (puede tener encodings variados)."""
@@ -100,12 +102,6 @@ def _connect() -> imaplib.IMAP4_SSL:
     conn.login(IMAP_USER, IMAP_PASSWORD)
     return conn
 
-
-<<<<<<< HEAD
-import json
-
-SEEN_EMAILS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "seen_emails.json")
-
 def _load_seen_emails() -> set:
     """Cargar los IDs de correos ya notificados."""
     if not os.path.exists(SEEN_EMAILS_FILE):
@@ -127,16 +123,13 @@ def _save_seen_emails(seen: set) -> None:
     except Exception as e:
         logger.error(f"Error guardando seen_emails.json: {e}")
 
-def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_new: bool = False) -> dict:
-=======
-def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool = False) -> dict:
->>>>>>> origin/feature/migration-agno
+def _list_emails_sync(folder: str = "INBOX", limit: int = 10, unread_only: bool = False) -> dict:
     """Listar los últimos N correos de una carpeta, buscando por fecha reciente."""
     try:
         conn = _connect()
         conn.select(folder, readonly=True)
 
-        if only_unseen:
+        if unread_only:
             # Buscar correos no leídos
             _, data = conn.search(None, "UNSEEN")
             mail_ids = data[0].split()
@@ -157,26 +150,14 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool 
                 _, data = conn.search(None, "ALL")
                 mail_ids = data[0].split()
 
-        seen_emails = _load_seen_emails() if only_new else set()
-
-        # Tomar los últimos N (IDs más altos = más recientes en IMAP) ANTES de filtrar
+        # Tomar los últimos N (IDs más altos = más recientes en IMAP)
         recent_ids = mail_ids[-limit:] if len(mail_ids) > limit else mail_ids
         recent_ids = list(reversed(recent_ids))  # Más recientes primero
 
-        # Ahora filtramos los que ya hemos visto de ese lote más reciente
-        if only_new:
-            recent_ids = [mid for mid in recent_ids if mid.decode() not in seen_emails]
-
         emails = []
-        new_seen_emails = set(seen_emails)
-
         for mid in recent_ids:
-<<<<<<< HEAD
             mid_str = mid.decode()
-            _, msg_data = conn.fetch(mid, "(RFC822.HEADER)")
-=======
             _, msg_data = conn.fetch(mid, "(RFC822.HEADER FLAGS)")
->>>>>>> origin/feature/migration-agno
             if not msg_data or not msg_data[0]:
                 continue
 
@@ -187,7 +168,6 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool 
                 if isinstance(item, tuple):
                     raw_headers = item[1]
                 elif isinstance(item, bytes):
-                    # El formato de flags puede variar, tratamos de encontrarlo
                     flags = item.decode(errors="ignore")
 
             if not raw_headers:
@@ -209,15 +189,9 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool 
                 "date": parsed_date,
                 "is_read": is_read,
             })
-            
-            if only_new:
-                new_seen_emails.add(mid_str)
 
         conn.close()
         conn.logout()
-
-        if only_new and new_seen_emails:
-            _save_seen_emails(new_seen_emails)
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
         return {
@@ -226,7 +200,7 @@ def _list_emails_sync(folder: str = "INBOX", limit: int = 10, only_unseen: bool 
             "count": len(emails),
             "total_in_period": len(mail_ids),
             "fetched_at": now,
-            "only_unseen": only_unseen,
+            "unread_only": unread_only,
         }
     except Exception as e:
         return {"error": f"Error leyendo correos: {str(e)}"}
@@ -322,17 +296,10 @@ def _search_emails_sync(query: str, folder: str = "INBOX", limit: int = 10) -> d
 
 # ─── Wrappers async (IMAP es síncrono, lo envolvemos con run_in_executor) ─────
 
-<<<<<<< HEAD
-async def list_emails(folder: str = "INBOX", limit: int = 10, only_new: bool = False) -> dict:
+async def list_emails(folder: str = "INBOX", limit: int = 10, unread_only: bool = False) -> dict:
     """Listar los últimos N correos."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _list_emails_sync, folder, limit, only_new)
-=======
-async def list_emails(folder: str = "INBOX", limit: int = 10, only_unseen: bool = False) -> dict:
-    """Listar los últimos N correos."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _list_emails_sync, folder, limit, only_unseen)
->>>>>>> origin/feature/migration-agno
+    return await loop.run_in_executor(None, _list_emails_sync, folder, limit, unread_only)
 
 
 async def read_email(email_id: str, folder: str = "INBOX") -> dict:

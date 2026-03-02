@@ -431,7 +431,7 @@ class JadaTools(Toolkit):
         import json; return json.dumps(await reminder_manager.cancel_all(self.room_id), ensure_ascii=False)
         
     # ── Cronjobs (tareas programadas del agente) ───────────────────────────────────
-    def cronjob_create(self, name: str, cron_expr: str, prompt: str, description: str = "", timezone: str = "UTC") -> str:
+    def cronjob_create(self, name: str, cron_expr: str, prompt: str, description: str = "", timezone: Optional[str] = None) -> str:
         """
         Crea una tarea programada para el agente. El agente ejecutará el 'prompt' automáticamente según la expresión cron.
         
@@ -439,13 +439,14 @@ class JadaTools(Toolkit):
             name: Nombre de la tarea (ej: 'Noticias mañaneras')
             cron_expr: Expresión cron: '* * * * *' = minuto hora día mes dia_semana
             prompt: Qué debe hacer el agente cuando se ejecute la tarea
-            timezone: Timezone (default: UTC, ej: America/Bogota)
+            timezone: Timezone (ej: America/Bogota, default: viene del .env o UTC)
         """
         from agent.scheduler import get_scheduler
         import time as _time
         import json
+        import os
         
-        sched = get_scheduler()
+        timezone = timezone or os.getenv("TIMEZONE", "UTC")
         if not sched:
             return json.dumps({"error": "Scheduler no inicializado. Reinicia Jada."}, ensure_ascii=False)
             
