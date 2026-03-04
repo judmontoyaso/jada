@@ -255,12 +255,29 @@ class MatrixBot:
 
             logger.info(f"🎤 Transcripción: {transcription[:80]}...")
 
+            # Detectar intención de audio en la transcripción
+            from tools.tts import user_wants_voice, strip_voice_intent
+            wants_voice = user_wants_voice(transcription)
+            agent_message = transcription
+            if wants_voice:
+                agent_message = strip_voice_intent(transcription)
+                logger.info(f"🔊 Voice intent detected. Cleaned: {agent_message[:60]}")
+
             # Enviar transcripción al agente como si fuera un mensaje de texto
             response = await self.agent.chat(
-                user_message=transcription,
+                user_message=agent_message,
                 user_id=event.sender,
                 room_id=room.room_id,
+                voice_only=wants_voice,
             )
+
+            # Si pidió audio, enviar como voz
+            if wants_voice and response:
+                sent = await self.send_voice(room.room_id, response)
+                if sent:
+                    await self._react(room.room_id, event.event_id, "🔊")
+                    return
+
             await self._send(room.room_id, response)
             await self._react(room.room_id, event.event_id, "🎤")
 
@@ -351,24 +368,12 @@ class MatrixBot:
 
         nudge_task = asyncio.create_task(_nudge())
         # Detectar intención de audio ANTES de enviar al agent
-        from tools.tts import user_wants_voice
+        from tools.tts import user_wants_voice, strip_voice_intent
         wants_voice = user_wants_voice(message)
         agent_message = message
         if wants_voice:
-            # Strip voice instructions para que el LLM no se confunda
-            import re
-            voice_patterns = [
-                r'(?i)\b(responde|dime|dilo|manda|mándame|mandame|envía|envia|envíale)\b.{0,10}\b(en|con|por)\b\s*(un\s*)?(audio|voz)\b',
-                r'(?i)\b(háblame|hablame|háblale|hablale)\b',
-                r'(?i)\ben\s+(?:un\s+)?audio\b',
-                r'(?i)\bpor\s+(?:un\s+)?(?:audio|voz)\b',
-                r'(?i)\bcon\s+(?:audio|voz)\b',
-            ]
-            for pat in voice_patterns:
-                agent_message = re.sub(pat, '', agent_message).strip()
-            agent_message = re.sub(r'\s{2,}', ' ', agent_message).strip()
-            if not agent_message:
-                agent_message = message  # fallback si quedó vacío
+            agent_message = strip_voice_intent(message)
+            logger.info(f"🔊 Voice intent detected. Cleaned: {agent_message[:60]}")
         try:
             # Mostrar indicador "escribiendo..." mientras procesa
             await self._set_typing(room.room_id, typing=True)
@@ -377,6 +382,7 @@ class MatrixBot:
                     user_message=agent_message,
                     user_id=event.sender,
                     room_id=room.room_id,
+                    voice_only=wants_voice,
                 ),
                 timeout=THINK_TIMEOUT,
             )

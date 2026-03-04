@@ -88,14 +88,38 @@ def should_use_voice(text: str) -> bool:
 
 def user_wants_voice(message: str) -> bool:
     """Detecta si el usuario pidió respuesta por audio."""
+    import re
     msg = message.lower()
-    triggers = [
-        "en audio", "en un audio", "con audio", "por audio",
-        "por voz", "con voz", "en voz",
-        "háblame", "hablame", "háblale", "hablale",
-        "responde con audio", "responde en audio",
-        "manda un audio", "mándame un audio", "mandame un audio",
-        "envía un audio", "envia un audio", "envíale un audio",
-        "dime con voz", "dilo con voz", "mándalo en audio",
+    # Regex patterns con palabras de relleno opcionales (un, una, el, la, esto, este)
+    filler = r'(?:\s+(?:un|una|el|la|esto|este|eso|ese))?\s+'
+    patterns = [
+        rf'\b(?:en|con|por){filler}(?:audio|voz)\b',
+        r'\b(?:háblame|hablame|háblale|hablale)\b',
+        rf'\b(?:responde|dime|dilo){filler}(?:audio|voz)\b',
+        rf'\b(?:manda|mándame|mandame|envía|envia|envíale){filler}(?:audio|voz)\b',
+        rf'\b(?:mándalo|mandalo){filler}(?:audio|voz)\b',
+        r'\bresponde\b.*\baudio\b',
     ]
-    return any(t in msg for t in triggers)
+    return any(re.search(p, msg) for p in patterns)
+
+
+def strip_voice_intent(message: str) -> str:
+    """Remueve frases de intención de audio del mensaje para que el LLM no se confunda."""
+    import re
+    filler = r'(?:\s+(?:un|una|el|la|esto|este|eso|ese))?\s+'
+    patterns = [
+        # "responde esto con un audio" / "responde en audio" / "responde esto en un audio"
+        rf'(?i)\b(?:responde|dime|dilo)\s+(?:esto\s+)?(?:en|con|por){filler}(?:audio|voz)\b\.?\s*',
+        # "envía un audio" / "mándame un audio"
+        rf'(?i)\b(?:manda|mándame|mandame|envía|envia|envíale){filler}(?:audio|voz)\b\.?\s*',
+        # "en audio" / "con un audio" / "por voz" standalone
+        rf'(?i)\b(?:en|con|por){filler}(?:audio|voz)\b\.?\s*',
+        # "háblame" / "hablame"
+        r'(?i)\b(?:háblame|hablame|háblale|hablale)\b\.?\s*',
+    ]
+    result = message
+    for pat in patterns:
+        result = re.sub(pat, ' ', result)
+    result = re.sub(r'\s{2,}', ' ', result).strip()
+    result = re.sub(r'^[.,;:\-!?]+\s*', '', result).strip()
+    return result if result else message

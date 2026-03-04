@@ -362,7 +362,7 @@ class Agent:
             self._session_locks[session_id] = asyncio.Lock()
         return self._session_locks[session_id]
 
-    async def chat(self, user_message: str, user_id: str, room_id: str, images: Optional[list[str]] = None) -> str:
+    async def chat(self, user_message: str, user_id: str, room_id: str, images: Optional[list[str]] = None, voice_only: bool = False) -> str:
         """
         Punto de entrada principal. Detecta qué tool groups necesita
         y crea un agente con SOLO esos tools (3-8 en vez de 44).
@@ -386,7 +386,11 @@ class Agent:
         live_instructions = _build_instructions()
 
         # 5. Detect which tool groups are needed
-        groups = self._detect_groups(msg_lower)
+        if voice_only:
+            groups = None  # Force chat-only path for voice responses
+            logger.info("🔊 Voice-only mode: skipping tool routing")
+        else:
+            groups = self._detect_groups(msg_lower)
 
         # 6. Process
         lock = self._get_session_lock(room_id)
