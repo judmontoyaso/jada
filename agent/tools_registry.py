@@ -645,14 +645,13 @@ class JadaTools(Toolkit):
         Úsala cuando el usuario pida describir, analizar o explicar una imagen que está en el servidor.
         Para imágenes generadas por Jada, la ruta suele ser /opt/jada/tmp/images/
         Si el usuario dice "la última imagen", busca la más reciente en esa carpeta.
+        También para analizar páginas renderizadas de PDFs (ruta: /tmp/jada_pdf_pages/).
         
         Args:
-            file_path: Ruta absoluta de la imagen (ej: /opt/jada/tmp/images/gen_123.png)
+            file_path: Ruta absoluta de la imagen (ej: /opt/jada/tmp/images/gen_123.png, /tmp/jada_pdf_pages/planos_p1.png)
             question: Pregunta o instrucción sobre la imagen (default: describir en español).
         """
-        import json, os, base64, requests
-        from dotenv import load_dotenv
-        load_dotenv()
+        import json, os, base64, requests, asyncio
 
         # Auto-find latest image if path doesn't exist
         if not os.path.exists(file_path):
@@ -668,46 +667,38 @@ class JadaTools(Toolkit):
         if not os.path.exists(file_path):
             return json.dumps({"error": f"Archivo no encontrado: {file_path}"}, ensure_ascii=False)
 
-        try:
-            # Read and encode image
+        def _call_vision():
             with open(file_path, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode()
 
             ext = os.path.splitext(file_path)[1].lower()
             mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}.get(ext.strip('.'), "image/png")
 
-            # Call NVIDIA NIM vision API (Mistral Large 3)
             vision_model = os.getenv("NVIDIA_VISION_MODEL", "mistralai/mistral-large-3-675b-instruct-2512")
             api_key = os.getenv("NVIDIA_API_KEY", "")
 
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": vision_model,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": question},
-                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-                    ],
-                }],
-                "max_tokens": 1024,
-                "temperature": 0.3,
-            }
-
             resp = requests.post(
                 "https://integrate.api.nvidia.com/v1/chat/completions",
-                json=payload, headers=headers, timeout=60,
+                json={
+                    "model": vision_model,
+                    "messages": [{"role": "user", "content": [
+                        {"type": "text", "text": question},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                    ]}],
+                    "max_tokens": 1500,
+                    "temperature": 0.3,
+                },
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                timeout=90,
             )
             resp.raise_for_status()
-            description = resp.json()["choices"][0]["message"]["content"]
+            return resp.json()["choices"][0]["message"]["content"]
 
+        try:
+            description = await asyncio.to_thread(_call_vision)
             return json.dumps({
                 "success": True,
                 "description": description,
-                "model": vision_model,
                 "file": os.path.basename(file_path),
             }, ensure_ascii=False)
         except Exception as e:

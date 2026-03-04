@@ -148,7 +148,7 @@ class Agent:
         "describe": ["media"], "describir": ["media"], "describeme": ["media"],
         "la imagen": ["media"], "última imagen": ["media"], "ultima imagen": ["media"],
         # Deep think
-        "ahonda": ["think"], "analiza": ["storage"],
+        "ahonda": ["think"],
         # Storage (Supabase)
         "sube": ["storage"], "subir": ["storage"], "subelo": ["storage"],
         "storage": ["storage"], "nube": ["storage"], "supabase": ["storage"],
