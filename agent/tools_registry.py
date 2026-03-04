@@ -754,32 +754,36 @@ class JadaTools(Toolkit):
 
     async def _analyze_image_vision(self, file_path: str, question: str) -> str:
         """Internal: analyze an image with the NVIDIA vision API."""
-        import os, base64, requests
-        with open(file_path, "rb") as f:
-            img_b64 = base64.b64encode(f.read()).decode()
+        import os, base64, requests, asyncio
+        
+        def _call_vision():
+            with open(file_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode()
 
-        ext = os.path.splitext(file_path)[1].lower().strip('.')
-        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(ext, "image/png")
+            ext = os.path.splitext(file_path)[1].lower().strip('.')
+            mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(ext, "image/png")
 
-        vision_model = os.getenv("NVIDIA_VISION_MODEL", "mistralai/mistral-large-3-675b-instruct-2512")
-        api_key = os.getenv("NVIDIA_API_KEY", "")
+            vision_model = os.getenv("NVIDIA_VISION_MODEL", "mistralai/mistral-large-3-675b-instruct-2512")
+            api_key = os.getenv("NVIDIA_API_KEY", "")
 
-        resp = requests.post(
-            "https://integrate.api.nvidia.com/v1/chat/completions",
-            json={
-                "model": vision_model,
-                "messages": [{"role": "user", "content": [
-                    {"type": "text", "text": question},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-                ]}],
-                "max_tokens": 1500,
-                "temperature": 0.3,
-            },
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+            resp = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                json={
+                    "model": vision_model,
+                    "messages": [{"role": "user", "content": [
+                        {"type": "text", "text": question},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                    ]}],
+                    "max_tokens": 1500,
+                    "temperature": 0.3,
+                },
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                timeout=90,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        
+        return await asyncio.to_thread(_call_vision)
 
     # ── Storage (Supabase) ─────────────────────────────────────────────────
 
