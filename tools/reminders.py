@@ -41,11 +41,16 @@ class ReminderManager:
 
     def __init__(self):
         self._send_callback = None
+        self._voice_callback = None
         self._tasks: dict[str, asyncio.Task] = {}  # reminder_id → Task
         self._db = None
 
     def set_send_callback(self, callback):
         self._send_callback = callback
+
+    def set_voice_callback(self, callback):
+        """callback(room_id, text) → bool: True if sent as audio."""
+        self._voice_callback = callback
 
     def _get_col(self):
         """Get MongoDB collection (sync — wrap with asyncio.to_thread)."""

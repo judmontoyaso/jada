@@ -50,7 +50,7 @@ class JadaTools(Toolkit):
                 "browser_get_text", "browser_click", "browser_fill"],
         "files": ["run_command", "read_file", "write_file", "list_dir"],
         "media": ["generate_image", "send_file", "describe_image"],
-        "storage": ["storage_upload", "storage_list", "storage_download", "storage_delete", "read_file"],
+        "storage": ["storage_upload", "storage_list", "storage_download", "storage_delete", "read_file", "send_file"],
         "think": ["deep_think"],
     }
 
@@ -606,7 +606,7 @@ class JadaTools(Toolkit):
         Args:
             file_path: Ruta absoluta del archivo en el servidor (ej: /opt/jada/tmp/images/gen_123.png)
         """
-        import json, os
+        import os
         if not os.path.exists(file_path):
             # Try to find the most recent image if path looks like tmp/images
             if 'images' in file_path or 'tmp' in file_path:
@@ -630,8 +630,7 @@ class JadaTools(Toolkit):
             if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
                 await self.bot.send_image(self.room_id, file_path, os.path.basename(file_path))
             else:
-                # For non-images, upload and send as file
-                await self.bot.send_image(self.room_id, file_path, os.path.basename(file_path))
+                await self.bot.send_file(self.room_id, file_path)
             return json.dumps({"success": True, "message": f"✅ Archivo enviado: {os.path.basename(file_path)}"}, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": f"Error enviando archivo: {str(e)}"}, ensure_ascii=False)

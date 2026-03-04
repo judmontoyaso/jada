@@ -104,14 +104,14 @@ def _build_heartbeat_prompt(action_type: str, tone_text: str = "") -> str:
     return actions.get(action_type, actions["observation"])
 
 
-async def run_heartbeat(agent, send_callback, room_id: str) -> None:
+async def run_heartbeat(agent, send_callback, room_id: str, voice_callback=None) -> None:
     """
     Ejecuta un ciclo del heartbeat:
     1. Lee config de heartbeat.md
     2. Decide si hablar (por probabilidad)
     3. Elige tipo de acción
     4. Genera mensaje con el Agent (usa agent.chat() con failover)
-    5. Lo envía al room
+    5. Lo envía al room (voz si es posible, texto como fallback)
     """
     config = _parse_heartbeat_config()
 
@@ -166,9 +166,16 @@ async def run_heartbeat(agent, send_callback, room_id: str) -> None:
     if not message:
         return
 
-    # Enviar al room
+    # Enviar al room: intentar voz primero, fallback a texto
     try:
-        await send_callback(target_room, message)
-        logger.info(f"💓 Heartbeat enviado al room {target_room}")
+        sent_voice = False
+        if voice_callback:
+            try:
+                sent_voice = await voice_callback(target_room, message)
+            except Exception:
+                sent_voice = False
+        if not sent_voice:
+            await send_callback(target_room, message)
+        logger.info(f"💓 Heartbeat enviado {'(voz)' if sent_voice else '(texto)'} al room {target_room}")
     except Exception as e:
         logger.error(f"Heartbeat: error enviando mensaje: {e}")

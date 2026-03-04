@@ -154,6 +154,8 @@ class Agent:
         "storage": ["storage"], "nube": ["storage"], "supabase": ["storage"],
         "descarga": ["storage"], "descargar": ["storage"],
         "compartir": ["storage"], "comparte": ["storage"],
+        "envíamelo": ["storage"], "mándamelo": ["storage"],
+        "mandamelo": ["storage"], "enviamelo": ["storage"],
         # Summary triggers (multiple groups)
         "resumen del día": ["email", "calendar", "gym"],
         "resumen de hoy": ["email", "calendar", "gym"],

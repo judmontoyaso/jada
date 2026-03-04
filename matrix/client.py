@@ -35,6 +35,7 @@ ACCESS_TOKEN   = os.getenv("MATRIX_ACCESS_TOKEN", "")
 ROOM_IDS_RAW   = os.getenv("MATRIX_ROOM_IDS", "")
 ALLOWED_ROOMS  = set(r.strip() for r in ROOM_IDS_RAW.split(",") if r.strip())
 AGENT_NAME     = os.getenv("AGENT_NAME", "Jada")
+GYM_ROOM_ALIAS = os.getenv("GYM_ROOM", "#gimnasio:matrix.juanmontoya.me")
 
 # Retry config
 MAX_RETRY_DELAY = 60
@@ -64,6 +65,9 @@ class MatrixBot:
         self._MAX_PROCESSED = 500  # evitar memory leak en sesiones largas
         # Flag: True cuando el bot ya terminó el sync inicial y está listo
         self._ready = False
+        # Gym room: buffer de ejercicios
+        self._gym_room_id: Optional[str] = None
+        self._gym_buffer: list[str] = []
 
     async def start(self):
         """Conectar al servidor Matrix e iniciar el loop de eventos con retry."""
@@ -96,6 +100,7 @@ class MatrixBot:
         # Conectar el sistema de recordatorios al chat
         from tools.reminders import reminder_manager
         reminder_manager.set_send_callback(self._send)
+        reminder_manager.set_voice_callback(self.send_voice)
 
         # Sync inicial — recolecta estado sin procesar mensajes
         await self.client.sync(timeout=0)
@@ -306,6 +311,11 @@ class MatrixBot:
 
         logger.info(f"📨 [{room.room_id}] {event.sender}: {message[:80]}")
 
+        # ── Gym Room: intercept ──────────────────────────────────────────
+        if self._is_gym_room(room):
+            await self._handle_gym_message(room.room_id, event, message)
+            return
+
         # Deduplicar: ignorar si ya lo procesamos (protege contra doble instancia)
         if event.event_id in self._processed_events:
             logger.debug(f"Evento duplicado ignorado: {event.event_id}")
@@ -370,7 +380,174 @@ class MatrixBot:
             # Siempre apagar el typing indicator
             await self._set_typing(room.room_id, typing=False)
 
+        # Si el usuario pidió audio explícitamente, enviar como voz
+        from tools.tts import user_wants_voice
+        if response and user_wants_voice(message):
+            sent = await self.send_voice(room.room_id, response)
+            if sent:
+                return  # ya se envió como audio
+
         await self._send(room.room_id, response)
+
+    # ── Gym Room Logic ──────────────────────────────────────────────────────
+
+    def _is_gym_room(self, room) -> bool:
+        """Check if this room is the dedicated gym room."""
+        # Cache room_id on first match
+        if self._gym_room_id and room.room_id == self._gym_room_id:
+            return True
+        # Check canonical alias or name
+        alias = getattr(room, 'canonical_alias', '') or ''
+        name = getattr(room, 'name', '') or ''
+        if alias == GYM_ROOM_ALIAS or 'gimnasio' in name.lower() or 'gym' in name.lower():
+            self._gym_room_id = room.room_id
+            return True
+        return False
+
+    async def _handle_gym_message(self, room_id: str, event, message: str):
+        """Handle messages in the gym room: buffer exercises or process commands."""
+        msg_lower = message.strip().lower()
+
+        if msg_lower in ('/guardar', '/fin', '/save'):
+            await self._gym_save(room_id)
+        elif msg_lower in ('/cancelar', '/cancel'):
+            count = len(self._gym_buffer)
+            self._gym_buffer.clear()
+            await self._send(room_id, f"🗑️ Buffer limpiado ({count} mensajes descartados).")
+        elif msg_lower in ('/resumen', '/status'):
+            if not self._gym_buffer:
+                await self._send(room_id, "📋 Buffer vacío. Escribe tus ejercicios y luego `/guardar`.")
+            else:
+                lines = "\n".join(f"  {i+1}. {m}" for i, m in enumerate(self._gym_buffer))
+                await self._send(room_id, f"📋 **Buffer** ({len(self._gym_buffer)} ejercicios):\n{lines}")
+        elif msg_lower.startswith('/'):
+            await self._send(room_id, "Comandos: `/guardar` `/cancelar` `/resumen`")
+        else:
+            # Buffer the exercise message
+            self._gym_buffer.append(message)
+            await self._react(room_id, event.event_id, "🏋️")
+            logger.info(f"🏋️ Gym buffer +1: {message[:50]} (total: {len(self._gym_buffer)})")
+
+    async def _gym_save(self, room_id: str):
+        """Parse all buffered exercises via LLM and save to MongoDB."""
+        if not self._gym_buffer:
+            await self._send(room_id, "📋 No hay ejercicios en el buffer. Escribe algunos primero.")
+            return
+
+        await self._set_typing(room_id, typing=True)
+        try:
+            import json as _json
+            import requests
+            from datetime import date
+
+            all_text = "\n".join(self._gym_buffer)
+            today = date.today().isoformat()
+
+            # Parse via MiniMax (free)
+            prompt = f"""Parsea estos ejercicios de gym en JSON. Fecha: {today}
+
+Texto del usuario:
+{all_text}
+
+Responde SOLO este JSON:
+{{
+  "nombre": "Entrenamiento del día",
+  "tipo": "push|pull|legs|upper|lower|full|cardio|otro",
+  "grupos_musculares": ["pecho", "triceps", ...],
+  "ejercicios": [
+    {{"nombre": "Press banca", "series": 4, "repeticiones": 10, "peso_kg": 80}},
+    ...
+  ],
+  "notas": "observaciones si las hay"
+}}
+
+Reglas:
+- Si no hay peso, pon 0
+- Si dice "3x12" es series=3, repeticiones=12
+- Detecta el grupo muscular por el ejercicio
+- Si no hay tipo explícito, infierelo de los ejercicios"""
+
+            nvidia_key = os.getenv("NVIDIA_API_KEY", "")
+            model = os.getenv("NVIDIA_FUNCTION_MODEL", "minimaxai/minimax-m2.5")
+
+            resp = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "Eres un parser de ejercicios de gym. Responde SOLO JSON válido."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 800,
+                    "temperature": 0.1,
+                },
+                headers={
+                    "Authorization": f"Bearer {nvidia_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+
+            # Clean markdown if present
+            import re
+            content = content.strip()
+            if "```" in content:
+                content = re.sub(r'```json\s*', '', content)
+                content = re.sub(r'```\s*', '', content)
+                content = content.strip()
+
+            # Extract first JSON object
+            decoder = _json.JSONDecoder()
+            idx = content.find('{')
+            if idx == -1:
+                await self._send(room_id, "❌ No pude parsear los ejercicios. Intenta de nuevo.")
+                return
+
+            data, _ = decoder.raw_decode(content, idx)
+            exercises = data.get("ejercicios", [])
+
+            if not exercises:
+                await self._send(room_id, "❌ No encontré ejercicios válidos en el buffer.")
+                return
+
+            # Show summary before saving
+            summary_lines = []
+            for ex in exercises:
+                peso = f" @ {ex.get('peso_kg', 0)}kg" if ex.get('peso_kg', 0) > 0 else ""
+                summary_lines.append(f"• {ex['nombre']} — {ex.get('series', 0)}x{ex.get('repeticiones', 0)}{peso}")
+            
+            summary = "\n".join(summary_lines)
+            tipo = data.get("tipo", "general")
+            grupos = ", ".join(data.get("grupos_musculares", []))
+
+            # Save to MongoDB
+            gym_db = self.agent._tools.gym_db
+            result = await gym_db.save_workout(
+                name=data.get("nombre", "Entrenamiento"),
+                date_str=today,
+                exercises=exercises,
+                tipo=tipo,
+                grupos_musculares=data.get("grupos_musculares", []),
+                notes=data.get("notas", ""),
+            )
+
+            if result.get("success"):
+                self._gym_buffer.clear()
+                await self._send(
+                    room_id,
+                    f"✅ **Guardado** — {tipo.upper()} ({grupos})\n\n{summary}\n\n"
+                    f"📊 {len(exercises)} ejercicios → MongoDB"
+                )
+            else:
+                await self._send(room_id, f"❌ Error guardando: {result.get('error', 'unknown')}")
+
+        except Exception as e:
+            logger.error(f"❌ Gym save error: {e}")
+            await self._send(room_id, f"❌ Error procesando ejercicios: {str(e)}")
+        finally:
+            await self._set_typing(room_id, typing=False)
 
     async def _on_megolm(self, room, event: MegolmEvent):
         """Callback para mensajes encriptados que no se pueden descifrar."""
@@ -438,6 +615,106 @@ class MatrixBot:
         except Exception as e:
             logger.error(f"❌ Error enviando imagen: {e}")
             await self._send(room_id, f"⚠️ Error al enviar la imagen: {str(e)}")
+
+    async def send_file(self, room_id: str, file_path: str, body: str = ""):
+        """Sube y envía cualquier archivo a un room de Matrix."""
+        try:
+            import mimetypes
+            mxc_url = await self._upload_file(file_path)
+            if not mxc_url:
+                raise Exception("No se pudo obtener la URL MXC del archivo.")
+
+            filename = os.path.basename(file_path)
+            size = os.path.getsize(file_path)
+            mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+
+            content = {
+                "body": body or filename,
+                "info": {
+                    "size": size,
+                    "mimetype": mime_type,
+                },
+                "msgtype": "m.file",
+                "url": mxc_url,
+                "filename": filename,
+            }
+
+            await self.client.room_send(
+                room_id=room_id,
+                message_type="m.room.message",
+                content=content,
+            )
+            logger.info(f"📎 Archivo enviado a {room_id}: {file_path}")
+        except Exception as e:
+            logger.error(f"❌ Error enviando archivo: {e}")
+            await self._send(room_id, f"⚠️ Error al enviar el archivo: {str(e)}")
+
+    async def send_audio(self, room_id: str, file_path: str, body: str = ""):
+        """Sube y envía un audio a un room de Matrix como m.audio (reproducible inline)."""
+        try:
+            mxc_url = await self._upload_file(file_path)
+            if not mxc_url:
+                raise Exception("No se pudo obtener la URL MXC del audio.")
+
+            filename = os.path.basename(file_path)
+            size = os.path.getsize(file_path)
+
+            # Get duration with mutagen if available, else estimate
+            duration_ms = 0
+            try:
+                from mutagen.mp3 import MP3
+                audio = MP3(file_path)
+                duration_ms = int(audio.info.length * 1000)
+            except Exception:
+                # Rough estimate: ~150 bytes per ms for speech MP3
+                duration_ms = max(1000, size // 15)
+
+            content = {
+                "body": body or filename,
+                "info": {
+                    "size": size,
+                    "mimetype": "audio/mpeg",
+                    "duration": duration_ms,
+                },
+                "msgtype": "m.audio",
+                "url": mxc_url,
+            }
+
+            await self.client.room_send(
+                room_id=room_id,
+                message_type="m.room.message",
+                content=content,
+            )
+            logger.info(f"🔊 Audio enviado a {room_id}: {file_path} ({duration_ms}ms)")
+        except Exception as e:
+            logger.error(f"❌ Error enviando audio: {e}")
+            # Fallback: enviar como texto
+            if body:
+                await self._send(room_id, body)
+
+    async def send_voice(self, room_id: str, text: str) -> bool:
+        """Genera TTS con Deepgram y envía como audio. Returns True si envió audio."""
+        try:
+            from tools.tts import text_to_audio, should_use_voice
+            if not should_use_voice(text):
+                return False
+
+            filepath = await text_to_audio(text)
+            if not filepath:
+                return False
+
+            await self.send_audio(room_id, filepath, body=text)
+
+            # Cleanup temp file
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
+
+            return True
+        except Exception as e:
+            logger.error(f"❌ send_voice error: {e}")
+            return False
 
     async def _upload_file(self, file_path: str) -> str:
         """Sube un archivo al homeserver y retorna su URL MXC."""

@@ -91,7 +91,7 @@ def _ddg_search(query: str, max_results: int = 5, search_type: str = "text") -> 
                 logger.error(f"Error leyendo Google News RSS: {str(e)}")
                 return []
         else:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=max_results))
                 formatted = [

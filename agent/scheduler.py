@@ -293,7 +293,8 @@ class JadaScheduler:
                     self._save()
                     return
                 send_cb = getattr(self._agent, '_send_callback', None)
-                await run_heartbeat(agent=self._agent, send_callback=send_cb, room_id=room_id)
+                voice_cb = getattr(getattr(self._agent, 'bot', None), 'send_voice', None)
+                await run_heartbeat(agent=self._agent, send_callback=send_cb, room_id=room_id, voice_callback=voice_cb)
             else:
                 await self._callback(prompt, room_id)
             self._jobs[job_id]["last_status"] = "success"
