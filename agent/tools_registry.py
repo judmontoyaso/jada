@@ -47,7 +47,7 @@ class JadaTools(Toolkit):
         "web": ["web_search", "get_weather", "summarize_url", "browser_navigate",
                 "browser_get_text", "browser_click", "browser_fill"],
         "files": ["run_command", "read_file", "write_file", "list_dir"],
-        "media": ["generate_image"],
+        "media": ["generate_image", "send_file", "describe_image"],
         "think": ["deep_think"],
     }
 
@@ -84,6 +84,52 @@ class JadaTools(Toolkit):
         """Register all tools (full toolkit)."""
         all_groups = list(self.GROUPS.keys())
         self._register_groups(all_groups)
+
+    @staticmethod
+    def _compress_output(tool_name: str, raw_output: str, max_chars: int = 1500) -> str:
+        """Compress tool outputs to reduce context tokens sent to the LLM."""
+        import json
+        if len(raw_output) < 400:
+            return raw_output
+        try:
+            data = json.loads(raw_output)
+        except (json.JSONDecodeError, TypeError):
+            # Plain text — truncate
+            if len(raw_output) > max_chars:
+                return raw_output[:max_chars] + "\n... [truncado]"
+            return raw_output
+
+        # Web search: trim snippets, strip URLs to domain
+        if tool_name in ("web_search",) and "results" in data:
+            from urllib.parse import urlparse
+            for r in data["results"]:
+                if "snippet" in r and len(r["snippet"]) > 120:
+                    r["snippet"] = r["snippet"][:120] + "..."
+                if "url" in r:
+                    try:
+                        r["url"] = urlparse(r["url"]).netloc
+                    except Exception:
+                        pass
+            data.pop("engine", None)
+
+        # Email: trim long "from" headers
+        if tool_name in ("email_list", "email_search") and "emails" in data:
+            for e in data["emails"]:
+                if "from" in e and len(e["from"]) > 60:
+                    e["from"] = e["from"][:60] + "..."
+            data.pop("fetched_at", None)
+            data.pop("total_in_period", None)
+
+        # Browser text: cap at 2000 chars
+        if tool_name == "browser_get_text" and isinstance(data, dict):
+            for k in data:
+                if isinstance(data[k], str) and len(data[k]) > 2000:
+                    data[k] = data[k][:2000] + "\n... [truncado]"
+
+        compressed = json.dumps(data, ensure_ascii=False)
+        if len(compressed) > max_chars:
+            return compressed[:max_chars] + "..."
+        return compressed
 
 
     async def init_databases(self):
@@ -149,7 +195,9 @@ class JadaTools(Toolkit):
             max_results: Número máximo de resultados
             search_type: Tipo de búsqueda: 'text' o 'news'
         """
-        import json; return json.dumps(await search(query, max_results, search_type), ensure_ascii=False)
+        import json
+        raw = json.dumps(await search(query, max_results, search_type), ensure_ascii=False)
+        return self._compress_output("web_search", raw)
 
     def get_weather(self, location: str = "Medellin") -> str:
         """
@@ -166,7 +214,9 @@ class JadaTools(Toolkit):
     async def browser_get_text(self) -> str:
         """Extrae el texto visible de la página actualmente abierta en el browser."""
         browser = await BrowserTool.get_instance()
-        import json; return json.dumps(await browser.get_page_text(), ensure_ascii=False)
+        import json
+        raw = json.dumps(await browser.get_page_text(), ensure_ascii=False)
+        return self._compress_output("browser_get_text", raw, max_chars=2000)
 
     async def browser_click(self, selector: str) -> str:
         """Hace click en un elemento de la página usando un selector CSS o texto visible."""
@@ -354,7 +404,9 @@ class JadaTools(Toolkit):
     # ── Email ──────────────────────────────────────────────────────────────────
     async def email_list(self, folder: str = "INBOX", limit: int = 10, unread_only: bool = False) -> str:
         """Lista los últimos correos electrónicos del usuario (solo lectura). Muestra remitente, asunto y fecha. Usa unread_only=True para ver solo los no leídos."""
-        import json; return json.dumps(await list_emails(folder, limit, unread_only), ensure_ascii=False)
+        import json
+        raw = json.dumps(await list_emails(folder, limit, unread_only), ensure_ascii=False)
+        return self._compress_output("email_list", raw)
 
     async def email_read(self, email_id: str, folder: str = "INBOX") -> str:
         """Lee el contenido completo de un correo electrónico por su ID numérico."""
@@ -525,7 +577,7 @@ class JadaTools(Toolkit):
         """
         Genera una imagen artística usando Inteligencia Artificial (Stable Diffusion 3).
         Úsala SIEMPRE que el usuario pida crear, generar o dibujar una imagen.
-        La imagen se enviará automáticamente al chat.
+        La imagen se genera Y SE ENVÍA AUTOMÁTICAMENTE al chat.
         
         Args:
             prompt: Descripción detallada de la imagen (en inglés o español).
@@ -534,7 +586,123 @@ class JadaTools(Toolkit):
         import json
         res = generate_image(prompt, aspect_ratio)
         if res["success"] and self.bot:
-            # Enviar la imagen de forma asíncrona
-            asyncio.create_task(self.bot.send_image(self.room_id, res["file_path"], f"Generado: {prompt[:50]}..."))
-            return json.dumps({"success": True, "message": "🎨 Generando y enviando imagen..."}, ensure_ascii=False)
+            try:
+                await self.bot.send_image(self.room_id, res["file_path"], f"🎨 {prompt[:80]}")
+                return json.dumps({"success": True, "message": "Imagen generada y enviada al chat."}, ensure_ascii=False)
+            except Exception as e:
+                return json.dumps({"success": True, "file_path": res["file_path"], "message": f"Imagen generada en {res['file_path']} pero error al enviar: {e}"}, ensure_ascii=False)
         return json.dumps(res, ensure_ascii=False)
+
+    async def send_file(self, file_path: str) -> str:
+        """
+        Envía un archivo del servidor al chat de Matrix.
+        Úsala cuando el usuario pida enviar, mandar o mostrar un archivo, imagen o documento que está en el servidor.
+        También cuando generes una imagen y el usuario pida que la envíes.
+        Rutas comunes: /opt/jada/tmp/images/ para imágenes generadas.
+        
+        Args:
+            file_path: Ruta absoluta del archivo en el servidor (ej: /opt/jada/tmp/images/gen_123.png)
+        """
+        import json, os
+        if not os.path.exists(file_path):
+            # Try to find the most recent image if path looks like tmp/images
+            if 'images' in file_path or 'tmp' in file_path:
+                img_dir = '/opt/jada/tmp/images'
+                if os.path.exists(img_dir):
+                    files = sorted(os.listdir(img_dir), reverse=True)
+                    if files:
+                        file_path = os.path.join(img_dir, files[0])
+                    else:
+                        return json.dumps({"error": "No hay imágenes generadas."}, ensure_ascii=False)
+                else:
+                    return json.dumps({"error": f"Archivo no encontrado: {file_path}"}, ensure_ascii=False)
+            else:
+                return json.dumps({"error": f"Archivo no encontrado: {file_path}"}, ensure_ascii=False)
+        
+        if not self.bot:
+            return json.dumps({"error": "No hay conexión al chat."}, ensure_ascii=False)
+        
+        try:
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+                await self.bot.send_image(self.room_id, file_path, os.path.basename(file_path))
+            else:
+                # For non-images, upload and send as file
+                await self.bot.send_image(self.room_id, file_path, os.path.basename(file_path))
+            return json.dumps({"success": True, "message": f"✅ Archivo enviado: {os.path.basename(file_path)}"}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": f"Error enviando archivo: {str(e)}"}, ensure_ascii=False)
+
+    async def describe_image(self, file_path: str, question: str = "Describe esta imagen en detalle en español.") -> str:
+        """
+        Analiza y describe una imagen del servidor usando IA de visión (Mistral Large 3 via NVIDIA).
+        Úsala cuando el usuario pida describir, analizar o explicar una imagen que está en el servidor.
+        Para imágenes generadas por Jada, la ruta suele ser /opt/jada/tmp/images/
+        Si el usuario dice "la última imagen", busca la más reciente en esa carpeta.
+        
+        Args:
+            file_path: Ruta absoluta de la imagen (ej: /opt/jada/tmp/images/gen_123.png)
+            question: Pregunta o instrucción sobre la imagen (default: describir en español).
+        """
+        import json, os, base64, requests
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        # Auto-find latest image if path doesn't exist
+        if not os.path.exists(file_path):
+            if 'images' in file_path or 'tmp' in file_path or 'última' in file_path.lower() or file_path == 'latest':
+                img_dir = '/opt/jada/tmp/images'
+                if os.path.exists(img_dir):
+                    files = sorted([f for f in os.listdir(img_dir) if f.endswith(('.png', '.jpg', '.jpeg', '.webp'))], reverse=True)
+                    if files:
+                        file_path = os.path.join(img_dir, files[0])
+                    else:
+                        return json.dumps({"error": "No hay imágenes generadas."}, ensure_ascii=False)
+
+        if not os.path.exists(file_path):
+            return json.dumps({"error": f"Archivo no encontrado: {file_path}"}, ensure_ascii=False)
+
+        try:
+            # Read and encode image
+            with open(file_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode()
+
+            ext = os.path.splitext(file_path)[1].lower()
+            mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}.get(ext.strip('.'), "image/png")
+
+            # Call NVIDIA NIM vision API (Mistral Large 3)
+            vision_model = os.getenv("NVIDIA_VISION_MODEL", "mistralai/mistral-large-3-675b-instruct-2512")
+            api_key = os.getenv("NVIDIA_API_KEY", "")
+
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": vision_model,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": question},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                    ],
+                }],
+                "max_tokens": 1024,
+                "temperature": 0.3,
+            }
+
+            resp = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                json=payload, headers=headers, timeout=60,
+            )
+            resp.raise_for_status()
+            description = resp.json()["choices"][0]["message"]["content"]
+
+            return json.dumps({
+                "success": True,
+                "description": description,
+                "model": vision_model,
+                "file": os.path.basename(file_path),
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": f"Error analizando imagen: {str(e)}"}, ensure_ascii=False)

@@ -1,156 +1,181 @@
 """
-agent/embeddings_router.py — Semantic tool group router using all-MiniLM-L6-v2
+agent/embeddings_router.py — Router semántico usando NVIDIA NIM Embeddings API
 
-Embeds example phrases per tool group at startup (~80MB RAM).
-At runtime, encodes the user message and finds the closest groups via cosine similarity.
-Used as fallback when keyword matching finds no groups.
+Reemplaza sentence-transformers local (~400MB RAM) con API remota (~0 RAM).
+Usa nvidia/nv-embedqa-e5-v5 (1024 dims) vía integrate.api.nvidia.com.
+
+Pre-computa centroides de tool groups y guarda en disco.
+En runtime: embed query → cosine similarity → best group.
 """
+import os
+import json
 import logging
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import requests
+from pathlib import Path
+from typing import Optional
 
-logger = logging.getLogger("jada.embeddings")
+from dotenv import load_dotenv
 
-# ── Example phrases per tool group ──
-# More examples = better coverage of indirect/natural phrasing
-GROUP_EXAMPLES: dict[str, list[str]] = {
+load_dotenv()
+logger = logging.getLogger(__name__)
+
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
+EMBED_MODEL = "nvidia/nv-embedqa-e5-v5"
+EMBED_URL = "https://integrate.api.nvidia.com/v1/embeddings"
+SIMILARITY_THRESHOLD = 0.38
+CENTROIDS_PATH = Path(__file__).parent.parent / "data" / "tool_centroids.json"
+
+# Example phrases per tool group (for centroid computation)
+GROUP_EXAMPLES = {
     "notes": [
-        "guarda esta nota", "anota esto", "apúntame algo",
-        "escribe esto en mis notas", "qué notas tengo guardadas", "busca en mis notas",
-        "borra esa nota que guardé", "dame mis apuntes guardados",
-        "guárdame esta información como nota", "quiero guardar un apunte",
-        "necesito escribir algo para no olvidarlo",
+        "guarda esta nota", "anota esto", "apunta que", "guardar información",
+        "recordar esto", "agregar nota", "escribe esto", "toma nota",
     ],
     "email": [
-        "qué correos tengo", "revisa mi email", "manda un correo electrónico",
-        "envíale un email a juan", "tengo correos sin leer", "buscar un email",
-        "léeme ese correo electrónico", "responde ese mail", "escríbele por correo",
-        "qué me llegó al buzón de correo", "envía un mensaje por email",
+        "revisa el correo", "envía un email", "lee los correos",
+        "qué hay en el inbox", "mandar un correo", "responde ese email",
     ],
     "calendar": [
-        "agenda una reunión", "qué eventos tengo en el calendario",
-        "ponme una cita en la agenda", "cuándo es mi próxima reunión agendada",
-        "agéndame algo para la tarde", "tengo algo programado en el calendario",
-        "bloquear un espacio en la agenda", "cuándo estoy libre según mi calendario",
+        "qué tengo hoy", "agenda del día", "crear evento", "programar reunión",
+        "cita con el dentista", "mi calendario", "próximos eventos",
     ],
     "gym": [
-        "registra mi entrenamiento", "hice pierna hoy", "cuánto peso levanté",
-        "press banca 80kg 4x10", "mi rutina de hoy", "estadísticas de gym",
-        "qué ejercicios hice la semana pasada", "guarda este workout",
-        "empezar sesión de entrenamiento", "curl bicep 15kg",
-        "sentadilla con barra", "muéstrame mi progreso de pecho",
+        "registrar entrenamiento", "cuántas series hice", "rutina de hoy",
+        "agregar ejercicio", "mi progreso en el gym", "historial de entreno",
     ],
     "tv": [
         "prende la tele", "apaga el televisor", "sube el volumen",
-        "baja el volumen del tv", "pon netflix", "cambia de canal",
-        "estado del samsung", "silencia la tv", "enciende el televisor",
+        "cambia de canal", "estado del tv samsung",
     ],
     "reminders": [
-        "recuérdame en 5 minutos", "pon una alarma", "avísame a las 3",
-        "no dejes que se me olvide", "recordatorio para mañana",
-        "pon un timer de 10 minutos", "necesito que me recuerdes algo",
-        "recuérdame botar los zapatos", "despiértame en una hora",
-    ],
-    "cronjobs": [
-        "programa una tarea diaria", "quiero que todos los días hagas esto",
-        "crea un cronjob", "ejecutar algo cada hora", "tareas programadas",
-        "qué tareas automáticas tengo", "elimina esa tarea recurrente",
-        "cambia la frecuencia del job", "ejecuta esa tarea ahora",
+        "recuérdame en 30 minutos", "pon una alarma", "avísame cuando",
+        "recordatorio para mañana", "no me dejes olvidar",
     ],
     "web": [
-        "busca información sobre", "qué dice google de", "noticias de hoy",
-        "investiga sobre", "resumen de esta página", "abre esta url",
-        "qué clima hace", "va a llover hoy", "temperatura en bogotá",
-        "pronóstico del tiempo", "buscar en internet", "resúmeme este artículo",
+        "busca en internet", "qué dice google sobre", "noticias de hoy",
+        "investiga sobre", "cómo está el clima", "resumen de esta url",
     ],
     "files": [
-        "lee ese archivo", "crea un archivo", "lista los archivos",
-        "ejecuta este comando", "corre esto en terminal", "qué hay en esta carpeta",
-        "edita el archivo config", "muestra el contenido de",
+        "ejecuta este comando", "lee este archivo", "lista la carpeta",
+        "qué hay en el directorio", "crea un archivo",
     ],
     "media": [
-        "genera una imagen", "dibuja un gato", "crea una ilustración",
-        "hazme un dibujo", "genera arte de", "quiero una imagen de",
+        "genera una imagen de", "dibuja un gato", "crea una foto artística",
+        "mándame la imagen", "envía el archivo",
     ],
     "think": [
         "analiza esto en detalle", "piensa profundamente sobre",
-        "necesito un análisis completo", "ahonda en este tema",
-        "dame una opinión detallada", "evalúa las opciones",
+        "dame un análisis exhaustivo", "reflexiona sobre",
+    ],
+    "cronjobs": [
+        "crea una tarea programada", "lista los cronjobs",
+        "programar algo para cada hora", "borrar tarea automática",
     ],
 }
 
-# Similarity threshold — below this, no group matches
-SIMILARITY_THRESHOLD = 0.38
+
+def _embed_texts(texts: list[str], input_type: str = "query") -> list[list[float]]:
+    """Call NVIDIA NIM embedding API."""
+    headers = {
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "input": texts,
+        "model": EMBED_MODEL,
+        "input_type": input_type,
+    }
+    resp = requests.post(EMBED_URL, json=data, headers=headers, timeout=15)
+    resp.raise_for_status()
+    result = resp.json()
+    return [item["embedding"] for item in result["data"]]
 
 
 class EmbeddingRouter:
-    """Semantic router for tool groups using sentence embeddings."""
+    """Routes user queries to tool groups using cosine similarity."""
 
     def __init__(self):
-        self._model = None
-        self._group_embeddings: dict[str, np.ndarray] = {}
-        self._ready = False
+        self._centroids: dict[str, np.ndarray] = {}
+        self._loaded = False
 
-    def load(self):
-        """Load model and pre-compute group embeddings. Call once at startup."""
+    def _load_or_compute_centroids(self):
+        """Load pre-computed centroids from disk, or compute and save."""
+        if self._loaded:
+            return
+
+        # Try loading from cache
+        if CENTROIDS_PATH.exists():
+            try:
+                raw = json.loads(CENTROIDS_PATH.read_text())
+                self._centroids = {k: np.array(v) for k, v in raw.items()}
+                self._loaded = True
+                logger.info(f"🧠 Centroides cargados desde cache ({len(self._centroids)} groups)")
+                return
+            except Exception as e:
+                logger.warning(f"⚠️ Error leyendo centroides: {e}")
+
+        # Compute centroids
+        logger.info("🧠 Calculando centroides de tool groups via NVIDIA NIM...")
+        for group, examples in GROUP_EXAMPLES.items():
+            try:
+                embeddings = _embed_texts(examples, input_type="passage")
+                centroid = np.mean(embeddings, axis=0)
+                centroid = centroid / np.linalg.norm(centroid)  # normalize
+                self._centroids[group] = centroid
+            except Exception as e:
+                logger.warning(f"⚠️ Error embeddings para {group}: {e}")
+
+        # Save to cache
         try:
-            logger.info("🧠 Cargando modelo de embeddings (multilingual-MiniLM)...")
-            self._model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-
-            # Pre-compute average embedding per group
-            for group, examples in GROUP_EXAMPLES.items():
-                embeddings = self._model.encode(examples, normalize_embeddings=True)
-                # Store the centroid (average) of all example embeddings
-                self._group_embeddings[group] = np.mean(embeddings, axis=0)
-
-            self._ready = True
-            logger.info(f"✅ Embedding router listo ({len(self._group_embeddings)} grupos, {sum(len(v) for v in GROUP_EXAMPLES.values())} ejemplos)")
+            CENTROIDS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            raw = {k: v.tolist() for k, v in self._centroids.items()}
+            CENTROIDS_PATH.write_text(json.dumps(raw))
+            logger.info(f"🧠 Centroides guardados en {CENTROIDS_PATH}")
         except Exception as e:
-            logger.error(f"❌ Error cargando embedding router: {e}")
-            self._ready = False
+            logger.warning(f"⚠️ No se pudieron guardar centroides: {e}")
 
-    def route(self, message: str, top_k: int = 2) -> list[str]:
-        """
-        Find the most relevant tool groups for a message.
-        Returns list of group names sorted by relevance.
-        """
-        if not self._ready or not message.strip():
+        self._loaded = True
+
+    def route(self, query: str, top_k: int = 2) -> list[str]:
+        """Embed query and find closest tool groups above threshold."""
+        self._load_or_compute_centroids()
+
+        if not self._centroids:
             return []
 
         try:
-            # Encode the user message
-            msg_embedding = self._model.encode(message, normalize_embeddings=True)
+            q_emb = np.array(_embed_texts([query], input_type="query")[0])
+            q_emb = q_emb / np.linalg.norm(q_emb)
 
-            # Compute cosine similarity with each group centroid
-            scores: list[tuple[str, float]] = []
-            for group, group_emb in self._group_embeddings.items():
-                similarity = float(np.dot(msg_embedding, group_emb))
-                if similarity >= SIMILARITY_THRESHOLD:
-                    scores.append((group, similarity))
+            scores = {}
+            for group, centroid in self._centroids.items():
+                scores[group] = float(np.dot(q_emb, centroid))
 
-            # Sort by similarity (highest first) and return top_k
-            scores.sort(key=lambda x: x[1], reverse=True)
-            result = [g for g, _ in scores[:top_k]]
+            ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            matches = [g for g, s in ranked[:top_k] if s >= SIMILARITY_THRESHOLD]
 
-            if result:
-                top_scores = ", ".join(f"{g}={s:.2f}" for g, s in scores[:top_k])
-                logger.info(f"🧠 Embedding route: [{top_scores}]")
+            if matches:
+                top_score = ranked[0][1]
+                logger.info(f"🧠 Embedding match: {matches} (top score: {top_score:.3f})")
 
-            return result
-
+            return matches
         except Exception as e:
-            logger.error(f"❌ Embedding route error: {e}")
+            logger.warning(f"⚠️ Error en embedding route: {e}")
             return []
 
 
-# Singleton instance
-_router: EmbeddingRouter | None = None
+# Singleton
+_router: Optional[EmbeddingRouter] = None
 
 
-def get_router() -> EmbeddingRouter:
-    """Get or create the global embedding router."""
+def get_embedding_router() -> EmbeddingRouter:
     global _router
     if _router is None:
         _router = EmbeddingRouter()
-        _router.load()
     return _router
+
+
+# Alias for backward compatibility
+def get_router() -> EmbeddingRouter:
+    return get_embedding_router()

@@ -93,8 +93,13 @@ def _get_current_time_str() -> str:
     return now.strftime("%Y-%m-%d %H:%M:%S")
 
 def _build_instructions() -> str:
-    """Build system prompt with live timestamp (not stale from module load)."""
-    return f"{SYSTEM_PROMPT}\n\n{IDENTITY_CONTEXT}\n\nFecha y hora actual (Colombia): {_get_current_time_str()}"
+    """Build system prompt with live timestamp and playbook context."""
+    from agent.playbook import playbook_manager
+    playbook_ctx = playbook_manager.get_context(max_entries=10)
+    base = f"{SYSTEM_PROMPT}\n\n{IDENTITY_CONTEXT}\n\nFecha y hora actual (Colombia): {_get_current_time_str()}"
+    if playbook_ctx:
+        base += f"\n\n## Lecciones aprendidas\n{playbook_ctx}"
+    return base
 
 class Agent:
     """Wrapper para instanciar agno.agent.Agent e integrar el router de Matrix."""
@@ -136,8 +141,12 @@ class Agent:
         # Summarizer
         "resumen": ["web"], "resume": ["web"], "resumir": ["web"],
         "url": ["web"], "http": ["web"],
-        # Image
+        # Image / Media
         "genera": ["media"], "generar": ["media"], "dibuja": ["media"], "imagen": ["media"],
+        "foto": ["media"], "mándame": ["media"], "mandame": ["media"],
+        "envía la imagen": ["media"], "manda la imagen": ["media"],
+        "describe": ["media"], "describir": ["media"], "describeme": ["media"],
+        "la imagen": ["media"], "última imagen": ["media"], "ultima imagen": ["media"],
         # Deep think
         "ahonda": ["think"], "analiza": ["think"],
         # Summary triggers (multiple groups)
@@ -180,7 +189,7 @@ class Agent:
         )
 
         # Groups that should use NVIDIA (MiniMax) instead of GPT
-        self.NVIDIA_GROUPS = {'web', 'think'}
+        self.NVIDIA_GROUPS = {'web', 'think', 'email'}
 
         total_tools = sum(len(v) for v in JadaTools.GROUPS.values())
         logger.info(
@@ -430,6 +439,14 @@ class Agent:
                     for t in (target_agent.tools or []):
                         if isinstance(t, JadaTools):
                             self._tools._gym_session = t._gym_session
+
+                # ACE-lite: learn from interaction (background, non-blocking)
+                if groups:
+                    tool_names = groups  # Use groups as proxy for tools used
+                    from agent.playbook import playbook_manager
+                    asyncio.create_task(
+                        playbook_manager.maybe_learn(user_message, tool_names, final_text)
+                    )
 
                 return final_text or "..."
                 

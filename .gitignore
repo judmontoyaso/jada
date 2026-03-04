@@ -87,3 +87,6 @@ devices.json
 .agent/soul.md
 .agent/user.md
 .agent/heartbeat.md
+docs/
+.pytest_cache/
+devices.json
