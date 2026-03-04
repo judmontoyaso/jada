@@ -287,10 +287,13 @@ class JadaScheduler:
         try:
             if prompt == "__heartbeat__":
                 from agent.heartbeat import run_heartbeat
-                # In the new Agent wrapper, the model is inside self._agent.agent.model
-                llm = getattr(getattr(self._agent, 'agent', None), 'model', None)
+                if self._agent is None:
+                    logger.warning("⚠️ Heartbeat: agent no inicializado aún, saltando")
+                    self._jobs[job_id]["last_status"] = "skipped"
+                    self._save()
+                    return
                 send_cb = getattr(self._agent, '_send_callback', None)
-                await run_heartbeat(llm=llm, send_callback=send_cb, room_id=room_id)
+                await run_heartbeat(agent=self._agent, send_callback=send_cb, room_id=room_id)
             else:
                 await self._callback(prompt, room_id)
             self._jobs[job_id]["last_status"] = "success"

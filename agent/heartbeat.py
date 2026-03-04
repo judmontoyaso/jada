@@ -104,19 +104,23 @@ def _build_heartbeat_prompt(action_type: str, tone_text: str = "") -> str:
     return actions.get(action_type, actions["observation"])
 
 
-async def run_heartbeat(llm, send_callback, room_id: str) -> None:
+async def run_heartbeat(agent, send_callback, room_id: str) -> None:
     """
     Ejecuta un ciclo del heartbeat:
     1. Lee config de heartbeat.md
     2. Decide si hablar (por probabilidad)
     3. Elige tipo de acción
-    4. Genera mensaje con el LLM
+    4. Genera mensaje con el Agent (usa agent.chat() con failover)
     5. Lo envía al room
     """
     config = _parse_heartbeat_config()
 
     if not config["enabled"]:
         logger.debug("Heartbeat desactivado en heartbeat.md")
+        return
+
+    if agent is None:
+        logger.warning("Heartbeat: agent es None, no se puede generar mensaje")
         return
 
     # Usar room_id del config si no se pasa uno
@@ -144,45 +148,14 @@ async def run_heartbeat(llm, send_callback, room_id: str) -> None:
 
     logger.info(f"💓 Heartbeat activado — acción: {action}")
 
-    # Generar mensaje con LLM (con soul + tono del heartbeat.md)
+    # Generar mensaje usando el agent completo (con failover, tools, personalidad)
     try:
         prompt = _build_heartbeat_prompt(action, tone_text=config.get("tone_text", ""))
-        # If llm is an Agno model, we need to adapt
-        from agno.agent import Agent as AgnoAgent
-        from agno.models.nvidia import Nvidia
-        
-        # Determine if we got an Agno Agent or just a model
-        if isinstance(llm, AgnoAgent):
-            # If we passed the full agent
-            response = await llm.arun(prompt)
-            message = response.content
-        elif isinstance(llm, Nvidia) or hasattr(llm, "get_async_client"):
-            # It's an Agno Model
-            client = llm.get_async_client() if hasattr(llm, "get_async_client") else llm
-            try:
-                # Agno native client call
-                resp = await client.chat.completions.create(
-                    model=llm.id,
-                    messages=[
-                        {"role": "system", "content": prompt},
-                        {"role": "user", "content": "go"},
-                    ]
-                )
-                message = resp.choices[0].message.content
-            except AttributeError:
-                # Fallback if it's the old NvidiaLLM wrapper (just in case)
-                resp = await llm.chat([
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": "go"},
-                ])
-                message = resp.content
-        else:
-            # Fallback
-            resp = await llm.chat([
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": "go"},
-            ])
-            message = resp.content
+        message = await agent.chat(
+            user_message=prompt,
+            user_id="@heartbeat:jada",
+            room_id=target_room,
+        )
 
         if message:
             message = re.sub(r'<think>.*?</think>', '', message, flags=re.DOTALL).strip()

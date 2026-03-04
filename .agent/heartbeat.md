@@ -13,7 +13,7 @@ enabled: true
 # Default: cada 2 horas
 cron_expr: "0 */2 * * *"
 # Room donde hablar (vacío = room configurado en heartbeat)
-room_id: "!bglNwhnZmljwjGXRUg:matrix.juanmontoya.me"
+room_id: "!DdasevfyRjYNoNhmbY:matrix.juanmontoya.me"
 # Probabilidad de hablar cuando se activa (0-100)
 speak_probability: 60
 ```

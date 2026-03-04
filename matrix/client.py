@@ -61,6 +61,8 @@ class MatrixBot:
         # Deduplicación: event_ids ya procesados (evita doble respuesta si hay 2 instancias)
         self._processed_events: set[str] = set()
         self._MAX_PROCESSED = 500  # evitar memory leak en sesiones largas
+        # Flag: True cuando el bot ya terminó el sync inicial y está listo
+        self._ready = False
 
     async def start(self):
         """Conectar al servidor Matrix e iniciar el loop de eventos con retry."""
@@ -95,9 +97,11 @@ class MatrixBot:
         from tools.reminders import reminder_manager
         reminder_manager.set_send_callback(self._send)
 
-        # Sync inicial
+        # Sync inicial — recolecta estado sin procesar mensajes
         await self.client.sync(timeout=0)
         self._start_token = self.client.next_batch
+        # Ahora sí estamos listos para procesar mensajes NUEVOS
+        self._ready = True
         
         # Log joined rooms
         rooms = self.client.rooms
@@ -151,6 +155,8 @@ class MatrixBot:
 
     async def _on_image(self, room, event: RoomMessageImage):
         """Callback para imágenes nuevas."""
+        if not self._ready:
+            return
         # Ignorar mensajes de antes del inicio
         if self._start_token and event.server_timestamp < self._get_start_ms():
             return
@@ -196,6 +202,9 @@ class MatrixBot:
 
     async def _on_message(self, room, event: RoomMessageText):
         """Callback para mensajes nuevos en rooms."""
+        # Ignorar TODOS los mensajes hasta que el bot esté listo (sync inicial completo)
+        if not self._ready:
+            return
         # Ignorar mensajes de antes del inicio
         if self._start_token and event.server_timestamp < self._get_start_ms():
             return
@@ -247,13 +256,17 @@ class MatrixBot:
         ]
         import random as _rnd
 
+        nudge_sent = False
         async def _nudge():
-            """Avisa al usuario si la respuesta tarda demasiado."""
+            """Avisa al usuario si la respuesta tarda demasiado (1 solo mensaje)."""
+            nonlocal nudge_sent
             await asyncio.sleep(NUDGE_AFTER)
-            try:
-                await self._send(room.room_id, _rnd.choice(NUDGE_MSGS))
-            except Exception:
-                pass
+            if not nudge_sent:
+                nudge_sent = True
+                try:
+                    await self._send(room.room_id, _rnd.choice(NUDGE_MSGS))
+                except Exception:
+                    pass
 
         nudge_task = asyncio.create_task(_nudge())
         try:

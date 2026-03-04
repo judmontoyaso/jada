@@ -109,6 +109,13 @@ class JadaTools(Toolkit):
         await self.gym_db.init()
         await self.notes_db.init()
 
+    def set_context(self, user_id: str, room_id: str, bot: Any = None):
+        """Set per-request context (user, room, bot) for tool execution."""
+        self.user_id = user_id
+        self.room_id = room_id
+        if bot is not None:
+            self.bot = bot
+
     # ── Shell ──────────────────────────────────────────────────────────────────
     def run_command(self, command: str, timeout: int = 30) -> str:
         """
