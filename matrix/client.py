@@ -18,6 +18,7 @@ from nio import (
     LoginResponse,
     RoomMessageText,
     RoomMessageImage,
+    RoomMessageAudio,
     InviteEvent,
     MegolmEvent,
     DownloadResponse,
@@ -84,10 +85,9 @@ class MatrixBot:
         # Registrar callbacks antes del sync inicial para no perder mensajes nuevos
         self.client.add_event_callback(self._on_message, RoomMessageText)
         self.client.add_event_callback(self._on_image, RoomMessageImage)
+        self.client.add_event_callback(self._on_audio, RoomMessageAudio)
         self.client.add_event_callback(self._on_invite, InviteEvent)
         self.client.add_event_callback(self._on_megolm, MegolmEvent)
-        
-        # RoomMessageImage was used in my last view, let's stick to RoomMessageImage
         
         # Log joined rooms
         rooms = self.client.rooms
@@ -199,6 +199,77 @@ class MatrixBot:
             await self._send(room.room_id, f"⚠️ Error al procesar la imagen: {str(e)}")
         finally:
             await self._set_typing(room.room_id, typing=False)
+
+    async def _on_audio(self, room, event: RoomMessageAudio):
+        """Callback para mensajes de voz / audio."""
+        if not self._ready:
+            return
+        if self._start_token and event.server_timestamp < self._get_start_ms():
+            return
+        if event.sender == BOT_USER:
+            return
+        if ALLOWED_ROOMS and room.room_id not in ALLOWED_ROOMS:
+            return
+
+        logger.info(f"🎤 [{room.room_id}] {event.sender} envió audio: {event.body}")
+
+        # Deduplicar
+        if event.event_id in self._processed_events:
+            return
+        self._processed_events.add(event.event_id)
+
+        tmp_dir = "/tmp/jada_audio"
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        # Determinar extensión del archivo
+        ext = ".ogg"  # Matrix suele enviar ogg
+        if event.body and "." in event.body:
+            ext = os.path.splitext(event.body)[1]
+        file_path = os.path.join(tmp_dir, f"{event.event_id}{ext}")
+
+        try:
+            # Descargar audio
+            resp = await self.client.download(event.url)
+            if not isinstance(resp, DownloadResponse):
+                logger.error(f"❌ Error descargando audio: {resp}")
+                return
+
+            with open(file_path, "wb") as f:
+                f.write(resp.body)
+            logger.info(f"✅ Audio descargado: {file_path} ({len(resp.body)} bytes)")
+
+            # Transcribir con Groq Whisper
+            await self._set_typing(room.room_id, typing=True)
+            from tools.transcribe import transcribe_audio
+            transcription = await transcribe_audio(file_path)
+
+            if not transcription or transcription.startswith("Error"):
+                logger.error(f"❌ Transcripción falló: {transcription}")
+                await self._send(room.room_id, "⚠️ No pude transcribir el audio.")
+                return
+
+            logger.info(f"🎤 Transcripción: {transcription[:80]}...")
+
+            # Enviar transcripción al agente como si fuera un mensaje de texto
+            response = await self.agent.chat(
+                user_message=transcription,
+                user_id=event.sender,
+                room_id=room.room_id,
+            )
+            await self._send(room.room_id, response)
+            await self._react(room.room_id, event.event_id, "🎤")
+
+        except Exception as e:
+            logger.exception(f"Error procesando audio: {e}")
+            await self._send(room.room_id, f"⚠️ Error al procesar el audio: {str(e)}")
+        finally:
+            await self._set_typing(room.room_id, typing=False)
+            # Limpiar archivo temporal
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except Exception:
+                pass
 
     async def _on_message(self, room, event: RoomMessageText):
         """Callback para mensajes nuevos en rooms."""
