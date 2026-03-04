@@ -20,6 +20,7 @@ from agno.db.sqlite import SqliteDb
 from agno.media import Image as AgnoImage
 
 from agent.tools_registry import JadaTools
+from agent.embeddings_router import get_router as get_embedding_router
 from tools.gym_parser import expand_gym_notation
 
 load_dotenv()
@@ -183,12 +184,26 @@ class Agent:
         )
 
     def _detect_groups(self, msg_lower: str) -> list[str]:
-        """Detect which tool groups are needed based on keywords."""
+        """Detect tool groups: keywords first, embedding fallback if no match."""
+        # 1. Fast keyword matching
         groups: set[str] = set()
         for keyword, grps in self.KEYWORD_GROUPS.items():
             if keyword in msg_lower:
                 groups.update(grps)
-        return list(groups) if groups else []
+        if groups:
+            return list(groups)
+
+        # 2. Embedding fallback — catches indirect intents
+        try:
+            router = get_embedding_router()
+            semantic_groups = router.route(msg_lower, top_k=2)
+            if semantic_groups:
+                logger.info(f"🧠 Embedding fallback: {semantic_groups}")
+                return semantic_groups
+        except Exception as e:
+            logger.warning(f"⚠️ Embedding router error: {e}")
+
+        return []
 
     def _build_agent(self, instructions: str, groups: list[str] | None = None):
         """Build an agent with scoped tools for this specific request."""
@@ -230,6 +245,11 @@ class Agent:
     async def init(self):
         """Inicializa las conexiones a bases de datos y herramientas."""
         await self._tools.init_databases()
+        # Pre-load embedding model in background (non-blocking)
+        try:
+            get_embedding_router()  # triggers lazy load
+        except Exception as e:
+            logger.warning(f"⚠️ Embedding router no cargó: {e}")
         logger.info("✅ Agent Tools & DB inicializado")
 
     async def run_scheduled(self, prompt: str, room_id: str) -> None:

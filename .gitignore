@@ -83,3 +83,7 @@ node_modules/
 .env.local
 
 credentials.json
+devices.json
+.agent/soul.md
+.agent/user.md
+.agent/heartbeat.md
