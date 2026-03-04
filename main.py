@@ -69,6 +69,10 @@ def setup_logging(live_logs: bool) -> None:
 
         logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
 
+    # Silence noisy libraries (heartbeats, HTTP internals)
+    for noisy in ["pymongo.topology", "pymongo.connection", "hpack", "httpcore", "nio.responses"]:
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
 
 def print_banner(live_logs: bool = False) -> None:
     """Imprime el banner ASCII de Jada al iniciar el servidor."""

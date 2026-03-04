@@ -138,13 +138,35 @@ class PlaybookManager:
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
 
-            # Limpiar posible markdown
+            if not content or not content.strip():
+                logger.debug("Playbook: MiniMax returned empty response, skipping")
+                return
+
+            # Limpiar posible markdown y extraer JSON
+            import re
+            content = content.strip()
             if "```" in content:
-                import re
                 content = re.sub(r'```json\s*', '', content)
                 content = re.sub(r'```\s*', '', content)
+                content = content.strip()
 
-            data = json.loads(content.strip())
+            # Intentar parsear JSON directamente primero
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                # MiniMax a veces devuelve JSON + texto extra, o dos blobs
+                # Intentar extraer el primer JSON object válido
+                decoder = json.JSONDecoder()
+                # Buscar el primer '{'
+                idx = content.find('{')
+                if idx == -1:
+                    logger.debug(f"Playbook: no JSON in response: {content[:80]}")
+                    return
+                try:
+                    data, _ = decoder.raw_decode(content, idx)
+                except json.JSONDecodeError:
+                    logger.debug(f"Playbook: unparseable response: {content[:80]}")
+                    return
             lecciones = data.get("lecciones", [])
 
             if not lecciones:
@@ -156,6 +178,8 @@ class PlaybookManager:
             self._save()
             logger.info(f"📖 Playbook actualizado: +{len(lecciones)} lección(es), total={len(self.entries)}")
 
+        except json.JSONDecodeError as e:
+            logger.debug(f"Playbook: invalid JSON from MiniMax: {e}")
         except Exception as e:
             logger.debug(f"Playbook learn failed (non-critical): {e}")
 

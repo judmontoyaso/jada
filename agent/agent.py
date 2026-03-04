@@ -248,7 +248,7 @@ class Agent:
                 description=instructions,
                 db=self._memory_db,
                 add_history_to_context=True,
-                num_history_messages=10,
+                num_history_messages=6,
                 tools=[scoped_tools],
                 markdown=True,
             )
@@ -260,7 +260,7 @@ class Agent:
                 description=instructions,
                 db=self._memory_db,
                 add_history_to_context=True,
-                num_history_messages=10,
+                num_history_messages=6,
                 markdown=True,
             )
             return agent, None, 0, FUNCTION_MODEL
@@ -402,7 +402,7 @@ class Agent:
                         description=live_instructions,
                         db=self._memory_db,
                         add_history_to_context=True,
-                        num_history_messages=10,
+                        num_history_messages=6,
                         markdown=True,
                     )
                     current_images = media_files[:1]
@@ -487,7 +487,7 @@ class Agent:
                     description=instructions or _build_instructions(),
                     db=self._memory_db,
                     add_history_to_context=True,
-                    num_history_messages=10,
+                    num_history_messages=6,
                     tools=[scoped_tools],
                     markdown=True,
                 )
@@ -497,7 +497,7 @@ class Agent:
                     description=instructions or _build_instructions(),
                     db=self._memory_db,
                     add_history_to_context=True,
-                    num_history_messages=10,
+                    num_history_messages=6,
                     markdown=True,
                 )
 

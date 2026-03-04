@@ -76,10 +76,14 @@ def _ddg_search(query: str, max_results: int = 5, search_type: str = "text") -> 
                 root = ET.fromstring(xml_data)
                 
                 for item in root.findall(".//item")[:max_results]:
+                    raw_snippet = item.findtext("description", "")
+                    # Strip HTML tags and decode entities from Google News RSS
+                    import html
+                    clean_snippet = html.unescape(re.sub(r'<[^>]+>', '', raw_snippet)).strip()
                     formatted.append({
                         "title": item.findtext("title", ""),
                         "url": item.findtext("link", ""),
-                        "snippet": item.findtext("description", ""),
+                        "snippet": clean_snippet[:150] if clean_snippet else "",
                         "date": item.findtext("pubDate", ""),
                         "source": item.findtext("source", "")
                     })
