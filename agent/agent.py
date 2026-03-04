@@ -156,6 +156,7 @@ class Agent:
         "compartir": ["storage"], "comparte": ["storage"],
         "envíamelo": ["storage"], "mándamelo": ["storage"],
         "mandamelo": ["storage"], "enviamelo": ["storage"],
+        "pdf": ["storage"], "plano": ["storage"], "planos": ["storage"],
         # Summary triggers (multiple groups)
         "resumen del día": ["email", "calendar", "gym"],
         "resumen de hoy": ["email", "calendar", "gym"],

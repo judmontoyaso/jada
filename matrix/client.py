@@ -19,6 +19,7 @@ from nio import (
     RoomMessageText,
     RoomMessageImage,
     RoomMessageAudio,
+    RoomMessageFile,
     InviteEvent,
     MegolmEvent,
     DownloadResponse,
@@ -90,6 +91,7 @@ class MatrixBot:
         self.client.add_event_callback(self._on_message, RoomMessageText)
         self.client.add_event_callback(self._on_image, RoomMessageImage)
         self.client.add_event_callback(self._on_audio, RoomMessageAudio)
+        self.client.add_event_callback(self._on_file, RoomMessageFile)
         self.client.add_event_callback(self._on_invite, InviteEvent)
         self.client.add_event_callback(self._on_megolm, MegolmEvent)
         
@@ -202,6 +204,71 @@ class MatrixBot:
         except Exception as e:
             logger.exception(f"Error procesando imagen: {e}")
             await self._send(room.room_id, f"⚠️ Error al procesar la imagen: {str(e)}")
+        finally:
+            await self._set_typing(room.room_id, typing=False)
+
+    async def _on_file(self, room, event: RoomMessageFile):
+        """Callback para archivos (PDF, docs, etc.) — descarga, sube a Supabase, y guarda copia local."""
+        if not self._ready:
+            return
+        if self._start_token and event.server_timestamp < self._get_start_ms():
+            return
+        if event.sender == BOT_USER:
+            return
+        if ALLOWED_ROOMS and room.room_id not in ALLOWED_ROOMS:
+            return
+
+        # Deduplicar
+        if event.event_id in self._processed_events:
+            return
+        self._processed_events.add(event.event_id)
+
+        filename = event.body or "archivo"
+        logger.info(f"📎 [{room.room_id}] {event.sender} envió archivo: {filename}")
+
+        # Guardar en /opt/jada/tmp/ con nombre estable para que el agente lo encuentre
+        local_dir = "/opt/jada/tmp"
+        os.makedirs(local_dir, exist_ok=True)
+        safe_name = os.path.basename(filename)
+        local_path = os.path.join(local_dir, safe_name)
+
+        try:
+            await self._set_typing(room.room_id, typing=True)
+
+            # Descargar archivo de Matrix
+            resp = await self.client.download(event.url)
+            if not isinstance(resp, DownloadResponse):
+                logger.error(f"❌ Error descargando archivo: {resp}")
+                await self._send(room.room_id, "⚠️ No pude descargar el archivo.")
+                return
+
+            with open(local_path, "wb") as f:
+                f.write(resp.body)
+            logger.info(f"✅ Archivo descargado: {local_path} ({len(resp.body)} bytes)")
+
+            # Subir a Supabase S3
+            from tools.supabase_storage import upload_file
+            result = await upload_file(local_path, safe_name)
+
+            if result.get("success"):
+                url = result.get("public_url", "")
+                size_kb = result.get("size_bytes", 0) / 1024
+                msg = (
+                    f"☁️ **{safe_name}** subido a la nube ({size_kb:.0f} KB)\n"
+                    f"🔗 {url}"
+                )
+                # Si es PDF, informar que puede analizarlo
+                if safe_name.lower().endswith(".pdf"):
+                    msg += f"\n\n📄 Copia local guardada en `{local_path}` — pedime que lo analice si querés."
+                await self._send(room.room_id, msg)
+                await self._react(room.room_id, event.event_id, "☁️")
+            else:
+                error = result.get("error", "error desconocido")
+                await self._send(room.room_id, f"⚠️ No pude subir el archivo: {error}")
+
+        except Exception as e:
+            logger.exception(f"Error procesando archivo: {e}")
+            await self._send(room.room_id, f"⚠️ Error al procesar el archivo: {str(e)}")
         finally:
             await self._set_typing(room.room_id, typing=False)
 

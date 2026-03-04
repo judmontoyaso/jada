@@ -8,7 +8,10 @@ import asyncio
 import json
 from typing import Optional, List, Dict, Any
 
+import logging
 from agno.tools import Toolkit
+
+logger = logging.getLogger(__name__)
 from tools.shell import run_command
 from tools.files import read_file, write_file, list_dir
 from tools.web_search import search
@@ -26,6 +29,7 @@ from tools.samsung_tv import tv_control, tv_status, list_devices
 from tools.weather import get_weather
 from tools.image_gen import generate_image
 from tools.supabase_storage import upload_file, list_files, download_file, delete_file
+from tools.pdf_reader import read_pdf, render_pdf_pages
 
 
 class JadaTools(Toolkit):
@@ -50,7 +54,7 @@ class JadaTools(Toolkit):
                 "browser_get_text", "browser_click", "browser_fill"],
         "files": ["run_command", "read_file", "write_file", "list_dir"],
         "media": ["generate_image", "send_file", "describe_image"],
-        "storage": ["storage_upload", "storage_list", "storage_download", "storage_delete", "read_file", "send_file"],
+        "storage": ["storage_upload", "storage_list", "storage_download", "storage_delete", "read_file", "send_file", "read_pdf"],
         "think": ["deep_think"],
     }
 
@@ -708,6 +712,74 @@ class JadaTools(Toolkit):
             }, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": f"Error analizando imagen: {str(e)}"}, ensure_ascii=False)
+
+    # ── PDF ─────────────────────────────────────────────────────────────────
+
+    async def read_pdf(self, file_path: str, max_pages: int = 30) -> str:
+        """Lee y extrae el texto de un archivo PDF. Usa esto para analizar PDFs.
+        Si el PDF es de imágenes (planos, escaneos), automáticamente analiza las páginas con visión IA.
+
+        Args:
+            file_path: Ruta local del PDF (ej: /opt/jada/tmp/planos.pdf, /tmp/jada_files/doc.pdf)
+            max_pages: Máximo de páginas a leer (default: 30)
+        """
+        import json
+        result = await read_pdf(file_path, max_pages)
+
+        # Si tiene texto, retornar directamente
+        if result.get("has_text"):
+            text = result.get("text", "")
+            if len(text) > 3000:
+                result["text"] = text[:3000] + "\n... [truncado]"
+            return json.dumps(result, ensure_ascii=False)
+
+        # Si no tiene texto (PDF de imágenes), renderizar y analizar con visión
+        if result.get("success") and not result.get("has_text"):
+            try:
+                render_result = await render_pdf_pages(file_path, max_pages=3)
+                if render_result.get("success") and render_result.get("image_paths"):
+                    # Usar el primer render para análisis con visión
+                    img_path = render_result["image_paths"][0]
+                    vision_result = await self._analyze_image_vision(
+                        img_path, "Analiza este documento/plano en detalle en español. Describe qué contiene, medidas, distribución, y cualquier dato relevante."
+                    )
+                    result["vision_analysis"] = vision_result
+                    result["rendered_pages"] = render_result["image_paths"]
+                    result["text"] = vision_result  # Para que el agente lo use
+            except Exception as e:
+                logger.error(f"Error en vision fallback para PDF: {e}")
+                result["vision_error"] = str(e)
+
+        return json.dumps(result, ensure_ascii=False)
+
+    async def _analyze_image_vision(self, file_path: str, question: str) -> str:
+        """Internal: analyze an image with the NVIDIA vision API."""
+        import os, base64, requests
+        with open(file_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+        ext = os.path.splitext(file_path)[1].lower().strip('.')
+        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(ext, "image/png")
+
+        vision_model = os.getenv("NVIDIA_VISION_MODEL", "mistralai/mistral-large-3-675b-instruct-2512")
+        api_key = os.getenv("NVIDIA_API_KEY", "")
+
+        resp = requests.post(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            json={
+                "model": vision_model,
+                "messages": [{"role": "user", "content": [
+                    {"type": "text", "text": question},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                ]}],
+                "max_tokens": 1500,
+                "temperature": 0.3,
+            },
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
     # ── Storage (Supabase) ─────────────────────────────────────────────────
 
