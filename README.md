@@ -1,6 +1,6 @@
 ﻿# 🖤 Jada — Personal AI Agent
 
-> Agente de IA personal construido desde cero. Matrix como interfaz, NVIDIA NIM como cerebro, cafeína como combustible.
+> Agente de IA personal con patrón Coordinator + ReAct. Matrix como interfaz, OpenAI como cerebro, cafeína como combustible.
 
 ```
      ██╗ █████╗ ██████╗  █████╗
@@ -16,57 +16,108 @@
 
 Jada es un agente de IA personal que vive en Matrix. Tiene humor negro, es directa, sarcástica con cariño, y útil de verdad. No pone "¿En qué más te puedo ayudar?" al final de cada mensaje. Ejecuta acciones reales, no simula.
 
+## Patrón de Diseño Agéntico
+
+Basado en el [Coordinator Pattern](https://docs.cloud.google.com/architecture/choose-design-pattern-agentic-ai-system?hl=es) de Google Cloud, con **Fast-Path Routing** para minimizar latencia.
+
+```mermaid
+graph TD
+    subgraph "Entrada"
+        M["👤 Usuario (Matrix)"]
+        C["⏰ Cronjob"]
+        H["💓 Heartbeat"]
+    end
+
+    M --> R["🧠 Agent.chat()"]
+    C --> R
+    H --> R
+
+    R --> D{"🔍 Intent Detection<br/>(keywords)"}
+
+    D -->|"Sin tools<br/>(hola, cómo estás)"| CHAT["💬 Chat Agent<br/>GPT-5-mini<br/>0 tools → ~2s"]
+    D -->|"Con tools<br/>(nota, correo, gym)"| TOOL["🛠️ Tool Agent<br/>GPT-5-mini<br/>44 tools → ReAct"]
+    D -->|"Imagen"| VIS["👁️ Vision Agent<br/>GPT-5-mini"]
+
+    CHAT -->|"Timeout"| FB{"⚠️ Failover"}
+    TOOL -->|"Timeout"| FB
+
+    FB -->|"Retry"| FALL["🔄 Fallback<br/>GPT-4.1"]
+    FALL --> OUT["📤 Matrix"]
+    CHAT --> OUT
+    TOOL --> OUT
+    VIS --> OUT
+```
+
+### ¿Por qué este patrón?
+
+| Decisión | Razón |
+|---|---|
+| **Fast-Path sin tools** | Un "hola" no necesita 44 schemas → responde en ~2s en vez de ~15s |
+| **Coordinator (no multi-agent)** | Un solo punto de entrada simplifica debugging y estado |
+| **ReAct loop** | El LLM razona → ejecuta tool → observa resultado → responde |
+| **Failover automático** | Si GPT-5-mini falla (timeout 45s), GPT-4.1 toma el relevo |
+| **Heartbeat proactivo** | Cada 2h decide si habla (chiste, consejo, pregunta) o se calla |
+
 ## Características
 
 - **Personalidad** — Definida en `.agent/soul.md`. Humor negro, directa, técnica cuando toca.
-- **Heartbeat** — Se activa proactivamente cada X horas. Hace chistes, da consejos, pregunta algo. Configurable en `.agent/heartbeat.md`.
+- **Heartbeat** — Se activa cada 2h. Chistes, consejos, preguntas. Config en `.agent/heartbeat.md`.
 - **Cronjobs** — Tareas programadas en lenguaje natural. "Revisa mi correo cada 30 minutos."
-- **Tools reales** — Correo (IMAP), Google Calendar, gym log (MongoDB), TV Samsung, web search, shell, notas.
+- **44 Tools** — Correo, Calendar, gym, TV Samsung, web search, notas, shell, imagen, recordatorios.
 - **ReAct loop** — Razona → activa tool → observa resultado → responde. No inventa.
-- **Failover de LLM** — Kimi K2 Thinking → MiniMax M2.1 → LLaMA 70B.
+- **Failover LLM** — GPT-5-mini → GPT-4.1 (automático en timeout).
 - **Dashboard** — Next.js en `jada_dashboard/`. Logs en vivo, editor de MD, gestor de cronjobs.
-- **Typing indicator** — "escribiendo..." real en Matrix mientras piensa.
-- **Watchdog** — Si el LLM tarda >25s avisa que sigue viva. A los 90s se rinde con dignidad.
+- **Nudge inteligente** — Si tarda >20s avisa once que sigue viva. A los 90s se rinde con dignidad.
 
 ## Stack
 
 | Capa | Tecnología |
 |------|-----------|
 | Interfaz | Matrix (matrix-nio) |
-| LLM | NVIDIA NIM — Kimi K2 Thinking |
-| LLM Client | **Agno** (`agno.models.nvidia`) — failover automático |
-| Memoria | SQLite (historial) + MongoDB (gym) |
+| LLM Primary | OpenAI — GPT-5-mini |
+| LLM Fallback | OpenAI — GPT-4.1 |
+| Framework | **Agno** (`agno.models.openai` + `agno.agent`) |
+| Memoria | SQLite (historial) + MongoDB Atlas (gym, notas) |
 | Scheduler | croniter + asyncio |
-| Dashboard | Next.js 16 + TypeScript |
-| Runtime | Python 3.11+ / systemd |
+| Dashboard | Next.js + TypeScript |
+| Runtime | Python 3.12 / systemd |
 
 ## Estructura
 
 ```
 jada/
-├── .agent/             # Configuración del agente (en git)
-│   ├── soul.md         # Personalidad de Jada
-│   ├── user.md         # Información del usuario
-│   ├── heartbeat.md    # Config del heartbeat proactivo
-│   └── identity.md     # Identidad adicional
+├── .agent/                  # Configuración del agente
+│   ├── soul.md              # Personalidad de Jada
+│   ├── user.md              # Info del usuario (Juan)
+│   └── heartbeat.md         # Config del heartbeat proactivo
 ├── agent/
-│   ├── agent.py        # Loop ReAct + tool selection
-│   ├── core.py         # Cliente LLM con failover
-│   ├── heartbeat.py    # Voz proactiva
-│   ├── memory.py       # Historial + facts (SQLite)
-│   ├── scheduler.py    # Cronjobs con croniter
-│   └── tools.py        # Schemas + dispatcher
+│   ├── agent.py             # Coordinator + ReAct loop + failover
+│   ├── tools_registry.py    # 44 tools registradas (Agno Toolkit)
+│   ├── heartbeat.py         # Voz proactiva (cada 2h)
+│   └── scheduler.py         # Cronjobs con croniter
 ├── matrix/
-│   └── client.py       # Bot Matrix con typing indicator
-├── tools/              # Implementaciones de tools
-│   ├── email.py        # IMAP Gmail
-│   ├── calendar.py     # Google Calendar ICS
-│   ├── gym_db.py       # MongoDB gym log
-│   ├── shell.py        # Comandos de sistema
-│   ├── web_search.py   # Brave Search API
-│   └── ...
-├── main.py             # Entrada principal
-└── jada_dashboard/     # Dashboard Next.js
+│   └── client.py            # Bot Matrix + typing + nudge + dedup
+├── tools/                   # Implementaciones de tools
+│   ├── notes.py             # CRUD notas (MongoDB)
+│   ├── email_reader.py      # IMAP Gmail (lectura)
+│   ├── email_sender.py      # SMTP Gmail (envío)
+│   ├── calendar_api.py      # Google Calendar ICS
+│   ├── gym_db.py            # MongoDB gym log
+│   ├── gym_parser.py        # Parser notación gym (3x10x80)
+│   ├── samsung_tv.py        # SmartThings API
+│   ├── web_search.py        # DuckDuckGo / Google News
+│   ├── weather.py            # Clima (wttr.in)
+│   ├── image_gen.py         # Stable Diffusion 3 (NVIDIA)
+│   ├── reminders.py         # Recordatorios rápidos
+│   ├── deep_think.py        # Modelo de razonamiento profundo
+│   ├── shell.py             # Comandos de sistema (whitelist)
+│   ├── browser.py           # Navegador headless
+│   ├── files.py             # Lectura/escritura de archivos
+│   └── summarizer.py        # Extractor de texto de URLs
+├── tests/                   # Tests
+├── main.py                  # Entrada principal
+├── cronjobs.json            # Estado de tareas programadas
+└── jada_dashboard/          # Dashboard Next.js
 ```
 
 ## Setup rápido
@@ -78,15 +129,14 @@ cd jada
 
 # 2. Entorno virtual
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+source .venv/bin/activate
 
 # 3. Dependencias
 pip install -r requirements.txt
 
 # 4. Configurar
 cp .env.example .env
-# Editar .env con tus credenciales
+# Editar .env con tus credenciales (ver abajo)
 
 # 5. Arrancar
 python main.py              # modo silencioso
@@ -96,9 +146,10 @@ python main.py --livelogs   # con logs en pantalla
 ## Variables de entorno (.env)
 
 ```env
-# LLM
-NVIDIA_API_KEY=nvapi-...
-NVIDIA_MODEL=moonshotai/kimi-k2-thinking
+# LLM (OpenAI)
+OPENAI_API_KEY=sk-proj-...
+OPENAI_FUNCTION_MODEL=gpt-5-mini
+OPENAI_FALLBACK_MODEL=gpt-4.1
 
 # Matrix
 MATRIX_HOMESERVER=https://matrix.tu-servidor.me
@@ -110,20 +161,21 @@ IMAP_SERVER=imap.gmail.com
 IMAP_USER=tu@gmail.com
 IMAP_PASSWORD=xxxx xxxx xxxx xxxx  # App Password
 
-# MongoDB (gym log)
+# MongoDB (gym + notas)
 MONGO_URI=mongodb+srv://...
 
-# Timeouts (opcionales)
-JADA_THINK_TIMEOUT=90   # seg máx para responder
-JADA_NUDGE_AFTER=25     # seg antes de avisar que sigue viva
+# Timeouts
+LLM_TIMEOUT=45              # seg por llamada LLM
+JADA_THINK_TIMEOUT=90       # seg máx total para responder
+JADA_NUDGE_AFTER=20         # seg antes de avisar que sigue viva
 ```
 
-## Correr en producción (systemd)
+## Producción (systemd)
 
 ```ini
 # /etc/systemd/system/jada.service
 [Unit]
-Description=Jada AI Agent
+Description=Jada AI Agent — Personal AI by 5panes
 After=network.target
 
 [Service]
@@ -150,12 +202,14 @@ journalctl -u jada -f  # ver logs
 | Comando | Resultado |
 |---------|-----------|
 | `consulta mis correos` | Lista bandeja de entrada |
+| `guarda una nota: ...` | Guarda en MongoDB |
 | `revisa el calendario` | Eventos de hoy |
-| `cancela el cronjob de correos` | Elimina tarea programada |
+| `recuérdame X en 30 minutos` | Recordatorio rápido |
 | `mis tareas programadas` | Lista cronjobs activos |
-| `recuérdame X en 30 minutos` | Recordatorio |
+| `prende la tele` | SmartThings TV |
+| `clima en Medellín` | Pronóstico actual |
+| `genera una imagen de...` | Stable Diffusion 3 |
 | `/clear` | Borra historial del chat |
-| `un chiste` | 50/50 de que sea bueno |
 
 ## Dashboard
 
