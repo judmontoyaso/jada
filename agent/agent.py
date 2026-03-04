@@ -8,7 +8,7 @@ import logging
 import asyncio
 import json
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from typing import Any, Dict, Optional
@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 from agno.agent import Agent as AgnoAgent
 from agno.models.openai import OpenAIChat
+from agno.models.nvidia import Nvidia
 from agno.db.sqlite import SqliteDb
 from agno.media import Image as AgnoImage
 
@@ -28,7 +29,8 @@ load_dotenv()
 AGENT_NAME = os.getenv("AGENT_NAME", "Jada")
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-5-mini")
 FUNCTION_MODEL = os.getenv("OPENAI_FUNCTION_MODEL", "gpt-5-mini")
-VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-5-mini")
+VISION_MODEL = os.getenv("NVIDIA_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
+NVIDIA_MODEL = os.getenv("NVIDIA_FUNCTION_MODEL", "minimaxai/minimax-m2.5")
 FALLBACK_MODEL = os.getenv("OPENAI_FALLBACK_MODEL", "gpt-4.1")
 
 logger = logging.getLogger("jada")
@@ -87,7 +89,8 @@ import pytz
 def _get_current_time_str() -> str:
     """Return current Bogotá time for the system prompt."""
     tz = pytz.timezone(os.getenv("TIMEZONE", "America/Bogota"))
-    return date.today().strftime("%Y-%m-%d") + " " + time.strftime("%H:%M:%S", time.localtime())
+    now = datetime.now(tz)
+    return now.strftime("%Y-%m-%d %H:%M:%S")
 
 def _build_instructions() -> str:
     """Build system prompt with live timestamp (not stale from module load)."""
@@ -167,17 +170,23 @@ class Agent:
             max_retries=1,
             timeout=self._llm_call_timeout,
         )
-        self.vision_model = OpenAIChat(
+        self.vision_model = Nvidia(
             id=VISION_MODEL,
-            api_key=os.getenv("OPENAI_API_KEY"),
-            max_retries=1,
-            timeout=self._llm_call_timeout,
+            api_key=os.getenv("NVIDIA_API_KEY"),
         )
+        self.nvidia_model = Nvidia(
+            id=NVIDIA_MODEL,
+            api_key=os.getenv("NVIDIA_API_KEY"),
+        )
+
+        # Groups that should use NVIDIA (MiniMax) instead of GPT
+        self.NVIDIA_GROUPS = {'web', 'think'}
 
         total_tools = sum(len(v) for v in JadaTools.GROUPS.values())
         logger.info(
             f"🤖 Agent inicializado:\n"
             f"  Primary:  {FUNCTION_MODEL}\n"
+            f"  NVIDIA:   {NVIDIA_MODEL}\n"
             f"  Fallback: {FALLBACK_MODEL}\n"
             f"  Vision:   {VISION_MODEL}\n"
             f"  Tool groups: {len(JadaTools.GROUPS)} ({total_tools} tools total)"
@@ -220,8 +229,13 @@ class Agent:
             )
             tool_count = len(scoped_tools.functions) + len(getattr(scoped_tools, 'async_functions', {}))
             
+            # Choose model: NVIDIA groups → MiniMax, else → GPT
+            use_nvidia = bool(set(groups) & self.NVIDIA_GROUPS)
+            model = self.nvidia_model if use_nvidia else self.primary_model
+            model_name = NVIDIA_MODEL if use_nvidia else FUNCTION_MODEL
+
             agent = AgnoAgent(
-                model=self.primary_model,
+                model=model,
                 description=instructions,
                 db=self._memory_db,
                 add_history_to_context=True,
@@ -229,7 +243,7 @@ class Agent:
                 tools=[scoped_tools],
                 markdown=True,
             )
-            return agent, scoped_tools, tool_count
+            return agent, scoped_tools, tool_count, model_name
         else:
             # Chat-only agent — no tools, minimum tokens
             agent = AgnoAgent(
@@ -240,11 +254,17 @@ class Agent:
                 num_history_messages=10,
                 markdown=True,
             )
-            return agent, None, 0
+            return agent, None, 0, FUNCTION_MODEL
 
     async def init(self):
         """Inicializa las conexiones a bases de datos y herramientas."""
         await self._tools.init_databases()
+        # Re-queue pending reminders from MongoDB (survive restarts)
+        from tools.reminders import reminder_manager
+        try:
+            await reminder_manager.load_pending_reminders()
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudieron cargar recordatorios pendientes: {e}")
         # Pre-load embedding model in background (non-blocking)
         try:
             get_embedding_router()  # triggers lazy load
@@ -266,13 +286,50 @@ class Agent:
         """Inyecta el callback de la sesión de Matrix."""
         self._send_callback = callback
 
-    def _strip_thinking(self, text: str) -> str:
-        """Eliminar tags <think> que agno ya no filtra en texto raw."""
+    def _clean_response(self, text: str) -> str:
+        """Clean LLM response: strip thinking tags and tool call artifacts."""
         if not text:
             return ""
+        # 1. Remove <think> tags
         cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
         cleaned = re.sub(r'<think>.*$', '', cleaned, flags=re.DOTALL)
+        # 2. Remove CALL_TOOL_NAME: {...} patterns (tool call narration)
+        cleaned = re.sub(r'CALL_\w+:\s*\{[^}]*\}', '', cleaned)
+        # 3. Remove raw JSON result blocks ({"results":[...]} etc)
+        cleaned = re.sub(r'\{"results"\s*:\s*\[.*?\]\}', '', cleaned, flags=re.DOTALL)
+        # 4. Remove lines that are just JSON objects
+        cleaned = re.sub(r'^\s*\{["\'].*?\}\s*$', '', cleaned, flags=re.MULTILINE)
+        # 5. Collapse excessive blank lines
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
         return cleaned.strip()
+
+    async def _run_background_task(self, message: str, user_id: str, room_id: str, groups: list[str]):
+        """Fire-and-forget: ejecuta un task lento en background y envía resultado via callback."""
+        try:
+            live_instructions = _build_instructions()
+            self._tools.set_context(user_id=user_id, room_id=room_id, bot=self.bot)
+            target_agent, _, tool_count, model_name = self._build_agent(live_instructions, groups)
+            logger.info(f"🔄 Background task iniciado ({groups}, {tool_count} tools)")
+
+            response = await asyncio.wait_for(
+                target_agent.arun(message, session_id=room_id),
+                timeout=180  # 3 min max for background tasks
+            )
+            result = self._clean_response(response.content)
+
+            # Sync gym state if needed
+            if 'gym' in groups and hasattr(target_agent, 'tools'):
+                for t in (target_agent.tools or []):
+                    if isinstance(t, JadaTools):
+                        self._tools._gym_session = t._gym_session
+
+            if result and self._send_callback:
+                await self._send_callback(room_id, result)
+                logger.info(f"📩 Background result enviado al room")
+        except Exception as e:
+            logger.error(f"❌ Background task falló: {e}")
+            if self._send_callback:
+                await self._send_callback(room_id, f"⚠️ La tarea en segundo plano falló: {str(e)[:100]}")
 
     async def clear_history(self, session_id: str) -> bool:
         """Borra el historial de una sesión (room) específica."""
@@ -329,8 +386,8 @@ class Agent:
                 current_images = None
 
                 if images:
-                    # Vision path
-                    logger.info(f"👁️ Vision → {VISION_MODEL}")
+                    # Vision path → NVIDIA Llama 3.2 (FREE, no GPT tokens)
+                    logger.info(f"👁️ Vision → {VISION_MODEL} (NVIDIA, gratis)")
                     target_agent = AgnoAgent(
                         model=self.vision_model,
                         description=live_instructions,
@@ -341,20 +398,30 @@ class Agent:
                     )
                     current_images = media_files[:1]
                 elif groups:
+                    # Check if this is a slow task that should run in background
+                    slow_groups = {'think'}
+                    if groups and set(groups) <= slow_groups and self._send_callback:
+                        # Fire-and-forget: respond immediately, process in background
+                        asyncio.create_task(
+                            self._run_background_task(user_message, user_id, room_id, groups)
+                        )
+                        logger.info(f"🔄 Async → {groups} lanzado en background")
+                        return "Dale, lo analizo y te aviso cuando termine. Puedes seguir hablando. 🧠"
+
                     # Tool path — create scoped agent with ONLY relevant tools
-                    target_agent, scoped_tools, tool_count = self._build_agent(live_instructions, groups)
-                    logger.info(f"🛠️ Tools → {FUNCTION_MODEL} ({tool_count} tools, groups: {groups})")
+                    target_agent, scoped_tools, tool_count, model_name = self._build_agent(live_instructions, groups)
+                    logger.info(f"🛠️ Tools → {model_name} ({tool_count} tools, groups: {groups})")
                 else:
                     # Chat path — NO tools, fastest
-                    target_agent, _, tool_count = self._build_agent(live_instructions, None)
-                    logger.info(f"💬 Chat → {FUNCTION_MODEL} (0 tools, rápido)")
+                    target_agent, _, tool_count, model_name = self._build_agent(live_instructions, None)
+                    logger.info(f"💬 Chat → {model_name} (0 tools, rápido)")
 
                 # Execute with failover
                 response = await self._run_with_failover(
                     user_message, room_id, target_agent, current_images, live_instructions, groups
                 )
                 
-                final_text = self._strip_thinking(response.content)
+                final_text = self._clean_response(response.content)
                 if not final_text:
                     final_text = "⚠️ Procesé tu mensaje pero la consulta no arrojó los datos esperados (o hubo un corte de red). Intenta formular la pregunta otra vez."
                 

@@ -441,10 +441,18 @@ class MatrixBot:
 
     async def _upload_file(self, file_path: str) -> str:
         """Sube un archivo al homeserver y retorna su URL MXC."""
-        import magic
-        mime = magic.Magic(mime=True)
-        content_type = mime.from_file(file_path)
-        
+        import mimetypes
+        # Use stdlib mimetypes — no external dependencies needed
+        content_type, _ = mimetypes.guess_type(file_path)
+        if not content_type:
+            ext = os.path.splitext(file_path)[1].lower()
+            content_type = {
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".gif": "image/gif", ".webp": "image/webp",
+                ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav",
+                ".mp4": "video/mp4", ".pdf": "application/pdf",
+            }.get(ext, "application/octet-stream")
+
         with open(file_path, "rb") as f:
             resp = await self.client.upload(
                 f,
