@@ -32,7 +32,27 @@ class JadaTools(Toolkit):
     Agno convierte los Docstrings y Type Hints de estos métodos en JSON Schemas.
     """
 
-    def __init__(self, user_id: str = "", room_id: str = "", bot: Any = None):
+    # ── Tool groups: maps group_name → list of method names ──
+    GROUPS = {
+        "notes": ["note_save", "note_list", "note_search", "note_delete"],
+        "email": ["email_list", "email_read", "email_search", "email_send"],
+        "calendar": ["calendar_today", "calendar_upcoming", "calendar_add_event"],
+        "gym": ["gym_save_workout", "gym_start_session", "gym_add_exercise",
+                "gym_end_session", "gym_get_recent", "gym_exercise_history",
+                "gym_save_routine", "gym_get_routines", "gym_get_stats"],
+        "tv": ["samsung_list_devices", "samsung_tv_status", "samsung_tv_control"],
+        "reminders": ["set_reminder", "list_reminders", "cancel_reminders"],
+        "cronjobs": ["cronjob_create", "cronjob_list", "cronjob_delete",
+                     "cronjob_update", "cronjob_run_now"],
+        "web": ["web_search", "get_weather", "summarize_url", "browser_navigate",
+                "browser_get_text", "browser_click", "browser_fill"],
+        "files": ["run_command", "read_file", "write_file", "list_dir"],
+        "media": ["generate_image"],
+        "think": ["deep_think"],
+    }
+
+    def __init__(self, user_id: str = "", room_id: str = "", bot: Any = None,
+                 groups: list[str] | None = None):
         super().__init__(name="jada_tools")
         self.user_id = user_id
         self.room_id = room_id
@@ -43,65 +63,27 @@ class JadaTools(Toolkit):
         self.notes_db = NotesDB()
         self._gym_session: Optional[Dict[str, Any]] = None
 
-        # Registrar dinámicamente qué métodos estarán expuestos al LLM
-        self.register(self.run_command)
-        self.register(self.read_file)
-        self.register(self.write_file)
-        self.register(self.list_dir)
-        self.register(self.web_search)
-        self.register(self.get_weather)
-        self.register(self.browser_navigate)
-        self.register(self.browser_get_text)
-        self.register(self.browser_click)
-        self.register(self.browser_fill)
-        self.register(self.samsung_list_devices)
-        self.register(self.samsung_tv_status)
-        self.register(self.samsung_tv_control)
-        
-        # Gym
-        self.register(self.gym_save_workout)
-        self.register(self.gym_start_session)
-        self.register(self.gym_add_exercise)
-        self.register(self.gym_end_session)
-        self.register(self.gym_get_recent)
-        self.register(self.gym_exercise_history)
-        self.register(self.gym_save_routine)
-        self.register(self.gym_get_routines)
-        self.register(self.gym_get_stats)
+        if groups is not None:
+            # ── Selective registration: only register tools from specified groups ──
+            self._register_groups(groups)
+        else:
+            # ── Full registration: all 44 tools ──
+            self._register_all()
 
-        # Notas
-        self.register(self.note_save)
-        self.register(self.note_list)
-        self.register(self.note_search)
-        self.register(self.note_delete)
+    def _register_groups(self, groups: list[str]):
+        """Register only tools from the specified groups."""
+        method_names: set[str] = set()
+        for g in groups:
+            method_names.update(self.GROUPS.get(g, []))
+        for name in method_names:
+            method = getattr(self, name, None)
+            if method:
+                self.register(method)
 
-        # Email
-        self.register(self.email_list)
-        self.register(self.email_read)
-        self.register(self.email_search)
-        self.register(self.email_send)
-
-        # Calendario
-        self.register(self.calendar_today)
-        self.register(self.calendar_upcoming)
-        self.register(self.calendar_add_event)
-
-        # Otros
-        self.register(self.summarize_url)
-        self.register(self.deep_think)
-        
-        # Recordatorios
-        self.register(self.set_reminder)
-        self.register(self.list_reminders)
-        self.register(self.cancel_reminders)
-        
-        # Cronjobs
-        self.register(self.cronjob_create)
-        self.register(self.cronjob_list)
-        self.register(self.cronjob_delete)
-        self.register(self.cronjob_update)
-        self.register(self.cronjob_run_now)
-        self.register(self.generate_image)
+    def _register_all(self):
+        """Register all tools (full toolkit)."""
+        all_groups = list(self.GROUPS.keys())
+        self._register_groups(all_groups)
 
 
     async def init_databases(self):

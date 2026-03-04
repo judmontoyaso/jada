@@ -1,5 +1,6 @@
 """
 agent/agent.py — Loop principal del agente (Agno nativo)
+Patrón: Coordinator + ReAct con Tool Group Routing
 """
 import os
 import re
@@ -24,11 +25,10 @@ from tools.gym_parser import expand_gym_notation
 load_dotenv()
 
 AGENT_NAME = os.getenv("AGENT_NAME", "Jada")
-CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
-FUNCTION_MODEL = os.getenv("OPENAI_FUNCTION_MODEL", "gpt-4.1-mini")
-VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-4.1-mini")
+CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-5-mini")
+FUNCTION_MODEL = os.getenv("OPENAI_FUNCTION_MODEL", "gpt-5-mini")
+VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-5-mini")
 FALLBACK_MODEL = os.getenv("OPENAI_FALLBACK_MODEL", "gpt-4.1")
-# LLM_TIMEOUT is now set per-instance in Agent.__init__ (self._llm_call_timeout)
 
 logger = logging.getLogger("jada")
 
@@ -82,14 +82,11 @@ SYSTEM_PROMPT = os.getenv(
 )
 
 import pytz
-from datetime import datetime
-
-TIMEZONE = os.getenv("TIMEZONE", "UTC")
 
 def _get_current_time_str() -> str:
-    tz = pytz.timezone(TIMEZONE)
-    now = datetime.now(tz)
-    return now.strftime("%Y-%m-%d %H:%M:%S %Z")
+    """Return current Bogotá time for the system prompt."""
+    tz = pytz.timezone(os.getenv("TIMEZONE", "America/Bogota"))
+    return date.today().strftime("%Y-%m-%d") + " " + time.strftime("%H:%M:%S", time.localtime())
 
 def _build_instructions() -> str:
     """Build system prompt with live timestamp (not stale from module load)."""
@@ -98,54 +95,65 @@ def _build_instructions() -> str:
 class Agent:
     """Wrapper para instanciar agno.agent.Agent e integrar el router de Matrix."""
 
-    # ── Keywords that trigger tools (case-insensitive, searched in msg_lower) ──
-    TOOL_KEYWORDS = [
+    # ── Keyword → Tool Group mapping ──
+    # Each keyword maps to specific tool groups to inject
+    KEYWORD_GROUPS: dict[str, list[str]] = {
         # Notes
-        "nota", "notas", "guarda", "guardar", "guardarme", "anota", "anotar", "apunta",
+        "nota": ["notes"], "notas": ["notes"], "guarda": ["notes"], "guardar": ["notes"],
+        "guardarme": ["notes"], "anota": ["notes"], "anotar": ["notes"], "apunta": ["notes"],
         # Email
-        "email", "correo", "correos", "inbox", "envía", "enviar", "enviale", "manda",
+        "email": ["email"], "correo": ["email"], "correos": ["email"], "inbox": ["email"],
+        "envía": ["email"], "enviar": ["email"], "enviale": ["email"], "manda": ["email"],
         # Calendar
-        "agenda", "calendario", "cita", "reunión", "evento", "agendar", "agendam",
+        "agenda": ["calendar"], "calendario": ["calendar"], "cita": ["calendar"],
+        "reunión": ["calendar"], "evento": ["calendar"], "agendar": ["calendar"],
         # Gym
-        "gym", "entrenamiento", "entrenar", "ejercicio", "rutina", "pesas", "repeticiones",
-        "series", "pierna", "press", "curl", "sentadilla",
-        # TV / SmartThings
-        "tv", "televisor", "tele", "samsung", "prende", "apaga", "volumen",
-        # Reminders / Cronjobs
-        "recordatorio", "recordar", "recuérdame", "recuerdame", "minutos", "hora",
-        "cronjob", "tarea programada", "programar",
-        # Weather
-        "clima", "temperatura", "lluvia", "pronóstico",
-        # Web / Browse
-        "busca", "buscar", "noticias", "google", "web",
+        "gym": ["gym"], "entrenamiento": ["gym"], "entrenar": ["gym"],
+        "ejercicio": ["gym"], "rutina": ["gym"], "pesas": ["gym"],
+        "repeticiones": ["gym"], "series": ["gym"], "pierna": ["gym"],
+        "press": ["gym"], "curl": ["gym"], "sentadilla": ["gym"],
+        # TV
+        "tv": ["tv"], "televisor": ["tv"], "tele": ["tv"], "samsung": ["tv"],
+        "prende": ["tv"], "apaga": ["tv"], "volumen": ["tv"],
+        # Reminders
+        "recordatorio": ["reminders"], "recordar": ["reminders"],
+        "recuérdame": ["reminders"], "recuerdame": ["reminders"],
+        "minutos": ["reminders"], "alarma": ["reminders"],
+        # Cronjobs
+        "cronjob": ["cronjobs"], "tarea programada": ["cronjobs"],
+        "programar": ["cronjobs"], "tareas programadas": ["cronjobs"],
+        # Weather + Web
+        "clima": ["web"], "temperatura": ["web"], "lluvia": ["web"],
+        "pronóstico": ["web"], "busca": ["web"], "buscar": ["web"],
+        "noticias": ["web"], "google": ["web"], "web": ["web"],
         # Files / Shell
-        "archivo", "carpeta", "ejecuta", "comando", "terminal",
+        "archivo": ["files"], "carpeta": ["files"], "ejecuta": ["files"],
+        "comando": ["files"], "terminal": ["files"],
         # Summarizer
-        "resumen", "resume", "resumir", "url", "http",
-        # Image gen
-        "genera", "generar", "dibuja", "imagen",
-        # Summary triggers (these need tools)
-        "resumen del día", "resumen de hoy",
+        "resumen": ["web"], "resume": ["web"], "resumir": ["web"],
+        "url": ["web"], "http": ["web"],
+        # Image
+        "genera": ["media"], "generar": ["media"], "dibuja": ["media"], "imagen": ["media"],
         # Deep think
-        "ahonda", "analiza",
-    ]
+        "ahonda": ["think"], "analiza": ["think"],
+        # Summary triggers (multiple groups)
+        "resumen del día": ["email", "calendar", "gym"],
+        "resumen de hoy": ["email", "calendar", "gym"],
+    }
 
     def __init__(self, bot: Any = None):
         self._send_callback = None
         self.bot = bot
-        self._tools = JadaTools(bot=self.bot)
+        self._tools = JadaTools(bot=self.bot)  # Full toolkit for DB init + scheduled tasks
         self._session_locks: Dict[str, asyncio.Lock] = {}
         
-        # SQLite DB automatically created/managed by Agno
         self._memory_db = SqliteDb(
             session_table="sessions",
             db_url="sqlite:///memory.db"
         )
         
-        # ── Timeout per LLM call (NOT the total think timeout) ──
         self._llm_call_timeout = int(os.getenv("LLM_TIMEOUT", "45"))
 
-        # Instanciar modelos OpenAI
         self.primary_model = OpenAIChat(
             id=FUNCTION_MODEL,
             api_key=os.getenv("OPENAI_API_KEY"),
@@ -165,55 +173,59 @@ class Agent:
             timeout=self._llm_call_timeout,
         )
 
-        # ── Build instructions dynamically (live timestamp) ──
-        instructions = _build_instructions()
-
-        # 1. Chat-only Agent (NO TOOLS) — fast, for pure conversation
-        #    Sending 0 tool schemas means much fewer tokens → much faster API response
-        self.chat_agent = AgnoAgent(
-            model=self.primary_model,
-            description=instructions,
-            db=self._memory_db,
-            add_history_to_context=True, 
-            num_history_messages=10,
-            markdown=True,
+        total_tools = sum(len(v) for v in JadaTools.GROUPS.values())
+        logger.info(
+            f"🤖 Agent inicializado:\n"
+            f"  Primary:  {FUNCTION_MODEL}\n"
+            f"  Fallback: {FALLBACK_MODEL}\n"
+            f"  Vision:   {VISION_MODEL}\n"
+            f"  Tool groups: {len(JadaTools.GROUPS)} ({total_tools} tools total)"
         )
 
-        # 2. Tool Agent (WITH TOOLS) — for action requests
-        self.tool_agent = AgnoAgent(
-            model=self.primary_model,
-            description=instructions,
-            db=self._memory_db,
-            add_history_to_context=True, 
-            num_history_messages=10,
-            tools=[self._tools],
-            markdown=True,
-        )
+    def _detect_groups(self, msg_lower: str) -> list[str]:
+        """Detect which tool groups are needed based on keywords."""
+        groups: set[str] = set()
+        for keyword, grps in self.KEYWORD_GROUPS.items():
+            if keyword in msg_lower:
+                groups.update(grps)
+        return list(groups) if groups else []
 
-        # 3. Fallback Agent (Kimi K2 + TOOLS) — slower but smarter, used on retry
-        self.fallback_agent = AgnoAgent(
-            model=self.fallback_model,
-            description=instructions,
-            db=self._memory_db,
-            add_history_to_context=True, 
-            num_history_messages=10,
-            tools=[self._tools],
-            markdown=True
-        )
-
-        # 4. Vision Agent (Llama 3.2) — multimodal, no tools
-        self.vision_agent = AgnoAgent(
-            model=self.vision_model,
-            description=instructions,
-            db=self._memory_db,
-            add_history_to_context=True, 
-            num_history_messages=10,
-            markdown=True
-        )
-
-    def _needs_tools(self, msg_lower: str) -> bool:
-        """Detect if the message requires tool execution."""
-        return any(kw in msg_lower for kw in self.TOOL_KEYWORDS)
+    def _build_agent(self, instructions: str, groups: list[str] | None = None):
+        """Build an agent with scoped tools for this specific request."""
+        if groups:
+            scoped_tools = JadaTools(bot=self.bot, groups=groups)
+            # Share DB connections (already initialized)
+            scoped_tools.gym_db = self._tools.gym_db
+            scoped_tools.notes_db = self._tools.notes_db
+            scoped_tools._gym_session = self._tools._gym_session
+            scoped_tools.set_context(
+                user_id=self._tools.user_id,
+                room_id=self._tools.room_id,
+                bot=self.bot,
+            )
+            tool_count = len(scoped_tools.functions) + len(getattr(scoped_tools, 'async_functions', {}))
+            
+            agent = AgnoAgent(
+                model=self.primary_model,
+                description=instructions,
+                db=self._memory_db,
+                add_history_to_context=True,
+                num_history_messages=10,
+                tools=[scoped_tools],
+                markdown=True,
+            )
+            return agent, scoped_tools, tool_count
+        else:
+            # Chat-only agent — no tools, minimum tokens
+            agent = AgnoAgent(
+                model=self.primary_model,
+                description=instructions,
+                db=self._memory_db,
+                add_history_to_context=True,
+                num_history_messages=10,
+                markdown=True,
+            )
+            return agent, None, 0
 
     async def init(self):
         """Inicializa las conexiones a bases de datos y herramientas."""
@@ -221,10 +233,9 @@ class Agent:
         logger.info("✅ Agent Tools & DB inicializado")
 
     async def run_scheduled(self, prompt: str, room_id: str) -> None:
-        """Punto de entrada para cronjobs."""
+        """Punto de entrada para cronjobs — usa ALL tools."""
         logger.info(f"⏰ Ejecutando tarea en room {room_id}: '{prompt[:80]}...'")
         try:
-            # Reusar id ficticio para tareas automáticas de cron
             response = await self.chat(prompt, "@scheduler:jada", room_id)
             if self._send_callback:
                 await self._send_callback(room_id, response)
@@ -254,15 +265,14 @@ class Agent:
             return False
 
     def _get_session_lock(self, session_id: str) -> asyncio.Lock:
-        """Obtiene o crea un lock de asyncio para una sesión específica."""
         if session_id not in self._session_locks:
             self._session_locks[session_id] = asyncio.Lock()
         return self._session_locks[session_id]
 
     async def chat(self, user_message: str, user_id: str, room_id: str, images: Optional[list[str]] = None) -> str:
         """
-        Punto de entrada principal. Decide si el mensaje necesita tools o no,
-        y enruta al agente apropiado para minimizar latencia.
+        Punto de entrada principal. Detecta qué tool groups necesita
+        y crea un agente con SOLO esos tools (3-8 en vez de 44).
         """
         # 1. Expand Gym notation
         if re.search(r'\d+x\d+x\d+', user_message) or 'con barra' in user_message.lower():
@@ -271,67 +281,79 @@ class Agent:
             if user_message != original:
                 logger.info(f"🏋️ Notación gym expandida")
 
-        # 2. Forzar uso de tools si el usuario pide resumen general
+        # 2. Force tools for summary requests
         msg_lower = user_message.strip().lower()
         if msg_lower in ["jada", "resumen", "resumen del día", "resumen de hoy", "hoy"]:
             user_message = f"{user_message}\n\n[SISTEMA INTERNO: El usuario ha pedido un resumen general. ESTÁS OBLIGADO a ejecutar inmediatamente las herramientas 'email_list' (con unread_only=False), 'calendar_today' (o 'calendar_upcoming') y 'gym_get_recent'. NUNCA respondas asumiendo datos ni inventes eventos; consulta siempre la base de datos a través de tus herramientas primero.]"
 
-        # 3. Inject context into JadaTools (thread-safe setter)
+        # 3. Inject context
         self._tools.set_context(user_id=user_id, room_id=room_id, bot=self.bot)
 
-        # 4. Refresh instructions with live timestamp for the agent about to be used
+        # 4. Build live instructions
         live_instructions = _build_instructions()
 
-        # 5. Use room_id as the session_id to maintain context
+        # 5. Detect which tool groups are needed
+        groups = self._detect_groups(msg_lower)
+
+        # 6. Process
         lock = self._get_session_lock(room_id)
         async with lock:
             try:
-                # Preparar contenido multimodal si hay imágenes
+                # Handle images
                 media_files = []
                 if images:
                     for img_path in images:
                         if os.path.exists(img_path):
                             media_files.append(AgnoImage(filepath=img_path))
 
-                # ── Agent selection based on intent ──
                 current_images = None
-                needs_tools = self._needs_tools(msg_lower)
 
                 if images:
+                    # Vision path
                     logger.info(f"👁️ Vision → {VISION_MODEL}")
-                    target_agent = self.vision_agent
+                    target_agent = AgnoAgent(
+                        model=self.vision_model,
+                        description=live_instructions,
+                        db=self._memory_db,
+                        add_history_to_context=True,
+                        num_history_messages=10,
+                        markdown=True,
+                    )
                     current_images = media_files[:1]
-                elif needs_tools:
-                    logger.info(f"🛠️ Tools → {FUNCTION_MODEL} (44 tools)")
-                    target_agent = self.tool_agent
+                elif groups:
+                    # Tool path — create scoped agent with ONLY relevant tools
+                    target_agent, scoped_tools, tool_count = self._build_agent(live_instructions, groups)
+                    logger.info(f"🛠️ Tools → {FUNCTION_MODEL} ({tool_count} tools, groups: {groups})")
                 else:
-                    logger.info(f"💬 Chat → {FUNCTION_MODEL} (sin tools, rápido)")
-                    target_agent = self.chat_agent
+                    # Chat path — NO tools, fastest
+                    target_agent, _, tool_count = self._build_agent(live_instructions, None)
+                    logger.info(f"💬 Chat → {FUNCTION_MODEL} (0 tools, rápido)")
 
-                # Update agent instructions with live timestamp
-                target_agent.description = live_instructions
-
-                logger.info(f"📤 arun() → {target_agent.model.id}, tools: {needs_tools}, imgs: {len(current_images) if current_images else 0}")
-                
-                # ── Execute with failover ──
+                # Execute with failover
                 response = await self._run_with_failover(
-                    user_message, room_id, target_agent, current_images, live_instructions
+                    user_message, room_id, target_agent, current_images, live_instructions, groups
                 )
                 
                 final_text = self._strip_thinking(response.content)
                 if not final_text:
                     final_text = "⚠️ Procesé tu mensaje pero la consulta no arrojó los datos esperados (o hubo un corte de red). Intenta formular la pregunta otra vez."
                 
+                # Sync gym session state back to main toolkit
+                if groups and 'gym' in groups and hasattr(target_agent, 'tools'):
+                    for t in (target_agent.tools or []):
+                        if isinstance(t, JadaTools):
+                            self._tools._gym_session = t._gym_session
+
                 return final_text or "..."
                 
             except Exception as e:
                 logger.error(f"❌ Error en Agno Agent: {e}")
                 return "⚠️ Ocurrió un error al procesar tu solicitud."
 
-    async def _run_with_failover(self, message: str, room_id: str, target_agent, images=None, instructions: str = ""):
+    async def _run_with_failover(self, message: str, room_id: str, target_agent, images=None, instructions: str = "", groups: list[str] | None = None):
         """
         Intenta ejecutar con el agente primario. Si falla (timeout/error),
-        reintenta con el agente fallback (Kimi K2).
+        reintenta con fallback (GPT-4.1) con the same scoped tools.
         """
         try:
             response = await asyncio.wait_for(
@@ -341,13 +363,40 @@ class Agent:
             logger.info(f"📩 Respuesta de {target_agent.model.id}: {response.content[:100]}...")
             return response
         except (asyncio.TimeoutError, Exception) as e:
-            if target_agent == self.vision_agent:
-                # No fallback for vision — just re-raise
-                raise
+            if images:
+                raise  # No fallback for vision
             logger.warning(f"⚠️ Primario ({target_agent.model.id}) falló: {e}. Intentando fallback...")
-            # Switch to fallback agent
-            fallback = self.fallback_agent
-            fallback.description = instructions or _build_instructions()
+            
+            # Build fallback with same scoped tools
+            if groups:
+                scoped_tools = JadaTools(bot=self.bot, groups=groups)
+                scoped_tools.gym_db = self._tools.gym_db
+                scoped_tools.notes_db = self._tools.notes_db
+                scoped_tools._gym_session = self._tools._gym_session
+                scoped_tools.set_context(
+                    user_id=self._tools.user_id,
+                    room_id=self._tools.room_id,
+                    bot=self.bot,
+                )
+                fallback = AgnoAgent(
+                    model=self.fallback_model,
+                    description=instructions or _build_instructions(),
+                    db=self._memory_db,
+                    add_history_to_context=True,
+                    num_history_messages=10,
+                    tools=[scoped_tools],
+                    markdown=True,
+                )
+            else:
+                fallback = AgnoAgent(
+                    model=self.fallback_model,
+                    description=instructions or _build_instructions(),
+                    db=self._memory_db,
+                    add_history_to_context=True,
+                    num_history_messages=10,
+                    markdown=True,
+                )
+
             try:
                 response = await asyncio.wait_for(
                     fallback.arun(message, session_id=room_id),
