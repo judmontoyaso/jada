@@ -23,6 +23,43 @@ MAX_TEXT_LENGTH = 500
 DEEPGRAM_TTS_URL = "https://api.deepgram.com/v1/speak"
 
 
+def _clean_for_tts(text: str) -> str:
+    """Limpia texto para que el TTS no lea emojis, markdown ni símbolos raros."""
+    import re
+    # 1. Quitar emojis (unicode emoji ranges)
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map
+        "\U0001F1E0-\U0001F1FF"  # flags
+        "\U00002702-\U000027B0"  # dingbats
+        "\U0000FE00-\U0000FE0F"  # variation selectors
+        "\U0000200D"             # zero width joiner
+        "\U00002600-\U000026FF"  # misc symbols
+        "\U0001FA00-\U0001FAFF"  # extended symbols
+        "\U00002B50"             # star
+        "\U0000231A-\U0000231B"  # watch/hourglass
+        "\U000023E9-\U000023F3"  # media controls
+        "\U000025AA-\U000025FE"  # geometric shapes
+        "]+", flags=re.UNICODE
+    )
+    text = emoji_pattern.sub('', text)
+    # 2. Quitar markdown: **bold**, *italic*, __underline__, `code`, ~~strike~~
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)     # **bold**
+    text = re.sub(r'\*(.+?)\*', r'\1', text)          # *italic*
+    text = re.sub(r'__(.+?)__', r'\1', text)          # __underline__
+    text = re.sub(r'_(.+?)_', r'\1', text)            # _italic_
+    text = re.sub(r'~~(.+?)~~', r'\1', text)          # ~~strike~~
+    text = re.sub(r'`(.+?)`', r'\1', text)            # `code`
+    # 3. Quitar bullet points y headers markdown
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)  # ### headers
+    text = re.sub(r'^\s*[-•]\s+', '', text, flags=re.MULTILINE) # - bullets
+    # 4. Limpiar espacios múltiples
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+    return text
+
+
 async def text_to_audio(text: str, filename: str = "") -> str | None:
     """
     Convierte texto a audio MP3 usando Deepgram REST API.
@@ -31,6 +68,9 @@ async def text_to_audio(text: str, filename: str = "") -> str | None:
     if not DEEPGRAM_API_KEY:
         logger.warning("DEEPGRAM_API_KEY no configurado")
         return None
+
+    # Limpiar texto para TTS (sin emojis ni markdown)
+    text = _clean_for_tts(text)
 
     if not text or len(text) > MAX_TEXT_LENGTH:
         return None
