@@ -5,6 +5,7 @@ Aquí registramos todas las funciones de `tools/` en la clase base de Agno `Tool
 para que el Agente infiera automáticamente los schemas Pydantic y las invoque.
 """
 import asyncio
+import json
 from typing import Optional, List, Dict, Any
 
 from agno.tools import Toolkit
@@ -24,6 +25,7 @@ from tools.deep_think import deep_think
 from tools.samsung_tv import tv_control, tv_status, list_devices
 from tools.weather import get_weather
 from tools.image_gen import generate_image
+from tools.supabase_storage import upload_file, list_files, download_file, delete_file
 
 
 class JadaTools(Toolkit):
@@ -48,6 +50,7 @@ class JadaTools(Toolkit):
                 "browser_get_text", "browser_click", "browser_fill"],
         "files": ["run_command", "read_file", "write_file", "list_dir"],
         "media": ["generate_image", "send_file", "describe_image"],
+        "storage": ["storage_upload", "storage_list", "storage_download", "storage_delete", "read_file"],
         "think": ["deep_think"],
     }
 
@@ -706,3 +709,46 @@ class JadaTools(Toolkit):
             }, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": f"Error analizando imagen: {str(e)}"}, ensure_ascii=False)
+
+    # ── Storage (Supabase) ─────────────────────────────────────────────────
+
+    async def storage_upload(self, file_path: str, remote_name: str = "",
+                             folder: str = "") -> str:
+        """Sube un archivo local al storage en la nube. Retorna URL pública para compartir.
+
+        Args:
+            file_path: Ruta local del archivo a subir.
+            remote_name: Nombre con el que guardar en la nube (opcional, usa el nombre original si vacío).
+            folder: Carpeta en el storage donde guardar (opcional).
+        """
+        result = await upload_file(file_path, remote_name or None, folder)
+        return json.dumps(result, ensure_ascii=False)
+
+    async def storage_list(self, folder: str = "", limit: int = 20) -> str:
+        """Lista archivos almacenados en la nube.
+
+        Args:
+            folder: Carpeta a listar (vacío = raíz del bucket).
+            limit: Máximo de archivos a retornar.
+        """
+        result = await list_files(folder, limit)
+        return json.dumps(result, ensure_ascii=False)
+
+    async def storage_download(self, remote_path: str, dest_path: str = "") -> str:
+        """Descarga un archivo de la nube al servidor.
+
+        Args:
+            remote_path: Ruta del archivo en el storage (ej: 'docs/informe.pdf').
+            dest_path: Ruta local donde guardar (opcional, usa /opt/jada/tmp/).
+        """
+        result = await download_file(remote_path, dest_path or None)
+        return json.dumps(result, ensure_ascii=False)
+
+    async def storage_delete(self, remote_path: str) -> str:
+        """Elimina un archivo del storage en la nube.
+
+        Args:
+            remote_path: Ruta del archivo a eliminar (ej: 'docs/viejo.pdf').
+        """
+        result = await delete_file(remote_path)
+        return json.dumps(result, ensure_ascii=False)

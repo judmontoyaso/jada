@@ -149,6 +149,11 @@ class Agent:
         "la imagen": ["media"], "última imagen": ["media"], "ultima imagen": ["media"],
         # Deep think
         "ahonda": ["think"], "analiza": ["think"],
+        # Storage (Supabase)
+        "sube": ["storage"], "subir": ["storage"], "subelo": ["storage"],
+        "storage": ["storage"], "nube": ["storage"], "supabase": ["storage"],
+        "descarga": ["storage"], "descargar": ["storage"],
+        "compartir": ["storage"], "comparte": ["storage"],
         # Summary triggers (multiple groups)
         "resumen del día": ["email", "calendar", "gym"],
         "resumen de hoy": ["email", "calendar", "gym"],
@@ -189,7 +194,7 @@ class Agent:
         )
 
         # Groups that should use NVIDIA (MiniMax) instead of GPT
-        self.NVIDIA_GROUPS = {'web', 'think', 'email'}
+        self.NVIDIA_GROUPS = {'web', 'think', 'email', 'storage'}
 
         total_tools = sum(len(v) for v in JadaTools.GROUPS.values())
         logger.info(
