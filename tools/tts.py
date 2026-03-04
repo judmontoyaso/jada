@@ -89,6 +89,13 @@ def should_use_voice(text: str) -> bool:
 def user_wants_voice(message: str) -> bool:
     """Detecta si el usuario pidió respuesta por audio."""
     msg = message.lower()
-    triggers = ["responde con audio", "dime con voz", "en audio", "por voz",
-                "háblame", "hablame", "dilo con voz", "mándalo en audio"]
+    triggers = [
+        "en audio", "en un audio", "con audio", "por audio",
+        "por voz", "con voz", "en voz",
+        "háblame", "hablame", "háblale", "hablale",
+        "responde con audio", "responde en audio",
+        "manda un audio", "mándame un audio", "mandame un audio",
+        "envía un audio", "envia un audio", "envíale un audio",
+        "dime con voz", "dilo con voz", "mándalo en audio",
+    ]
     return any(t in msg for t in triggers)

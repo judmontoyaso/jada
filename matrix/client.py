@@ -350,12 +350,31 @@ class MatrixBot:
                     pass
 
         nudge_task = asyncio.create_task(_nudge())
+        # Detectar intención de audio ANTES de enviar al agent
+        from tools.tts import user_wants_voice
+        wants_voice = user_wants_voice(message)
+        agent_message = message
+        if wants_voice:
+            # Strip voice instructions para que el LLM no se confunda
+            import re
+            voice_patterns = [
+                r'(?i)\b(responde|dime|dilo|manda|mándame|mandame|envía|envia|envíale)\b.{0,10}\b(en|con|por)\b\s*(un\s*)?(audio|voz)\b',
+                r'(?i)\b(háblame|hablame|háblale|hablale)\b',
+                r'(?i)\ben\s+(?:un\s+)?audio\b',
+                r'(?i)\bpor\s+(?:un\s+)?(?:audio|voz)\b',
+                r'(?i)\bcon\s+(?:audio|voz)\b',
+            ]
+            for pat in voice_patterns:
+                agent_message = re.sub(pat, '', agent_message).strip()
+            agent_message = re.sub(r'\s{2,}', ' ', agent_message).strip()
+            if not agent_message:
+                agent_message = message  # fallback si quedó vacío
         try:
             # Mostrar indicador "escribiendo..." mientras procesa
             await self._set_typing(room.room_id, typing=True)
             response = await asyncio.wait_for(
                 self.agent.chat(
-                    user_message=message,
+                    user_message=agent_message,
                     user_id=event.sender,
                     room_id=room.room_id,
                 ),
@@ -381,8 +400,7 @@ class MatrixBot:
             await self._set_typing(room.room_id, typing=False)
 
         # Si el usuario pidió audio explícitamente, enviar como voz
-        from tools.tts import user_wants_voice
-        if response and user_wants_voice(message):
+        if response and wants_voice:
             sent = await self.send_voice(room.room_id, response)
             if sent:
                 return  # ya se envió como audio
