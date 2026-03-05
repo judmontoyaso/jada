@@ -30,6 +30,7 @@ from tools.weather import get_weather
 from tools.image_gen import generate_image
 from tools.supabase_storage import upload_file, list_files, download_file, delete_file
 from tools.pdf_reader import read_pdf, render_pdf_pages
+from tools.reddit import reddit_trending, reddit_subreddit, reddit_search
 
 
 class JadaTools(Toolkit):
@@ -56,6 +57,7 @@ class JadaTools(Toolkit):
         "media": ["generate_image", "send_file", "describe_image"],
         "storage": ["storage_upload", "storage_list", "storage_download", "storage_delete", "read_file", "send_file", "read_pdf", "describe_image"],
         "think": ["deep_think"],
+        "reddit": ["reddit_trending", "reddit_subreddit", "reddit_search"],
     }
 
     def __init__(self, user_id: str = "", room_id: str = "", bot: Any = None,
@@ -737,6 +739,46 @@ class JadaTools(Toolkit):
                 result["render_error"] = str(e)
 
         return json.dumps(result, ensure_ascii=False)
+
+    # ── Reddit ─────────────────────────────────────────────────────────────
+
+    async def reddit_trending(self, limit: int = 10) -> str:
+        """Muestra los posts más populares/trending de Reddit ahora mismo.
+
+        Args:
+            limit: Número de posts a mostrar (default: 10, máx 25)
+        """
+        import json
+        posts = await reddit_trending(min(limit, 25))
+        return json.dumps(posts, ensure_ascii=False)
+
+    async def reddit_subreddit(self, subreddit: str, sort: str = "hot",
+                               limit: int = 10, time_filter: str = "day") -> str:
+        """Muestra posts de un subreddit específico.
+
+        Args:
+            subreddit: Nombre del subreddit sin r/ (ej: technology, programming, colombia)
+            sort: Orden — hot, new, top, rising (default: hot)
+            limit: Número de posts (default: 10)
+            time_filter: Para sort=top: hour, day, week, month, year, all
+        """
+        import json
+        posts = await reddit_subreddit(subreddit, sort, min(limit, 25), time_filter)
+        return json.dumps(posts, ensure_ascii=False)
+
+    async def reddit_search(self, query: str, subreddit: str = "",
+                            limit: int = 10, sort: str = "relevance") -> str:
+        """Busca posts en Reddit por palabras clave.
+
+        Args:
+            query: Términos de búsqueda
+            subreddit: Buscar solo en este subreddit (opcional, vacío = todo Reddit)
+            limit: Número de resultados (default: 10)
+            sort: relevance, hot, top, new, comments
+        """
+        import json
+        posts = await reddit_search(query, subreddit, min(limit, 25), sort)
+        return json.dumps(posts, ensure_ascii=False)
 
     # ── Storage (Supabase) ─────────────────────────────────────────────────
 
