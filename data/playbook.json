@@ -5,5 +5,19 @@
     "importancia": "alta",
     "added_at": "2026-03-07T12:00:40.669794",
     "refinamientos": 0
+  },
+  {
+    "estrategia": "Mostrar los resultados crudos de las herramientas antes de dar conclusiones",
+    "cuando_usar": "Cuando se usan herramientas como email_list y el usuario necesita verificar el análisis",
+    "importancia": "alta",
+    "added_at": "2026-03-09T06:00:59.973897",
+    "refinamientos": 0
+  },
+  {
+    "estrategia": "Cuando una herramienta falla, proporcionar detalles específicos del error (código, mensaje, causa raíz) y posibles workarounds en lugar de solo reportar 'hubo un error'",
+    "cuando_usar": "Cuando cualquier tool retorna un error o falla en ejecutar una acción",
+    "importancia": "alta",
+    "added_at": "2026-03-09T12:02:28.394337",
+    "refinamientos": 0
   }
 ]

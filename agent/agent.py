@@ -389,9 +389,9 @@ class Agent:
         live_instructions = _build_instructions()
 
         # 5. Detect which tool groups are needed
-        if voice_only:
-            groups = None  # Force chat-only path for voice responses
-            logger.info("🔊 Voice-only mode: skipping tool routing")
+        if voice_only or user_id == "@heartbeat:jada":
+            groups = None  # Force chat-only path for voice responses/heartbeats
+            logger.info("🔊 Voice-only/Heartbeat mode: skipping tool routing")
         else:
             groups = self._detect_groups(msg_lower)
 

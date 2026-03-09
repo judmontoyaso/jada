@@ -768,6 +768,7 @@ Reglas:
                     "duration": duration_ms,
                 },
                 "msgtype": "m.audio",
+                "org.matrix.msc3245.voice": {},
                 "url": mxc_url,
             }
 
