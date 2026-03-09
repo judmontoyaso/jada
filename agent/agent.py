@@ -473,11 +473,19 @@ class Agent:
         Intenta ejecutar con el agente primario. Si falla (timeout/error),
         reintenta con fallback (GPT-4.1) con the same scoped tools.
         """
+        from tools.metrics import track_run_metrics
         try:
             response = await asyncio.wait_for(
                 target_agent.arun(message, session_id=room_id, images=images),
                 timeout=self._llm_call_timeout
             )
+            # Extraer llamadas a herramientas detectadas
+            tools_used = [t.tool_name for run in getattr(response, 'tools_used', []) for t in getattr(run, 'tool_calls', [])]
+            # Si no reporta (depende de agno version), usamos los grupos inferidos
+            if not tools_used and groups:
+                tools_used = groups
+                
+            track_run_metrics(room_id, target_agent.model.id, response, tools_used)
             logger.info(f"📩 Respuesta de {target_agent.model.id}: {response.content[:100]}...")
             return response
         except (asyncio.TimeoutError, Exception) as e:
@@ -520,6 +528,11 @@ class Agent:
                     fallback.arun(message, session_id=room_id),
                     timeout=self._llm_call_timeout
                 )
+                tools_used = [t.tool_name for run in getattr(response, 'tools_used', []) for t in getattr(run, 'tool_calls', [])]
+                if not tools_used and groups:
+                    tools_used = groups
+                
+                track_run_metrics(room_id, fallback.model.id, response, tools_used)
                 logger.info(f"📩 Fallback ({fallback.model.id}): {response.content[:100]}...")
                 return response
             except Exception as e2:

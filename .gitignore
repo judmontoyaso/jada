@@ -13,13 +13,13 @@ dist/
 build/
 
 # --- Entornos virtuales ---
-.venv\
 .venv
-venv\
+.venv
 venv
-env\
+venv
 env
-.env\
+env
+.env
 .env
 # Note: we specifically ignore the directories to avoid tracking thousands of library files
 

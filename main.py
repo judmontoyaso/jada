@@ -17,7 +17,7 @@ load_dotenv()
 
 from agent.agent import Agent
 from matrix.client import MatrixBot
-from tools.dashboard import start_dashboard
+from tools.api_server import start_api_server
 
 VERSION = "0.5.2"
 PIDFILE = os.getenv("JADA_PIDFILE", "jada.pid")
@@ -116,9 +116,6 @@ async def main(live_logs: bool = False) -> None:
     bot = MatrixBot(Agent)
     agent = bot.agent
     
-    # Iniciar dashboard web
-    start_dashboard()
-
     # Inicializar y arrancar scheduler
     from agent.scheduler import init_scheduler
     from agent.heartbeat import run_heartbeat, _parse_heartbeat_config
@@ -145,6 +142,9 @@ async def main(live_logs: bool = False) -> None:
                 room_id=hb_room,
             )
         logger.info(f"💓 Heartbeat registrado (cron={hb_config['cron_expr']}, prob={hb_config['speak_probability']}%)")
+
+    # Iniciar dashboard web API v2 (FastAPI)
+    start_api_server(scheduler_instance=scheduler)
 
     # Iniciar servidor Webhook local para n8n en background
     from tools.webhook_server import start_webhook
