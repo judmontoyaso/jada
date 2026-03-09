@@ -534,13 +534,21 @@ class JadaTools(Toolkit):
         return json.dumps({"success": True, "job": job, "message": f"✅ Tarea '{name}' creada con ID {job['id']}"}, ensure_ascii=False)
 
     def cronjob_list(self) -> str:
-        """Lista todas las tareas programadas del agente. USA ESTO PRIMERO para obtener el job_id antes de modificar o borrar."""
+        """Lista todas las tareas programadas del agente. USA ESTO PRIMERO para obtener el job_id"""
         from agent.scheduler import get_scheduler
         import json
         sched = get_scheduler()
         if not sched:
             return json.dumps({"error": "Scheduler no inicializado."}, ensure_ascii=False)
         return json.dumps({"jobs": sched.list_jobs(), "status": sched.get_status()}, ensure_ascii=False)
+
+    async def delete_file(self, url_or_path: str) -> str:
+        """Elimina un archivo de Supabase Storage mediante su URL o path en el bucket."""
+        import json
+        is_success, error_msg = await delete_file(url_or_path, self.user_id)
+        if not is_success:
+            return json.dumps({"error": error_msg}, ensure_ascii=False)
+        return json.dumps({"success": True, "message": "Archivo eliminado"}, ensure_ascii=False)
 
     def cronjob_delete(self, job_id: str) -> str:
         """Elimina permanentemente una tarea programada dado su job_id."""

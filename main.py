@@ -146,6 +146,10 @@ async def main(live_logs: bool = False) -> None:
             )
         logger.info(f"💓 Heartbeat registrado (cron={hb_config['cron_expr']}, prob={hb_config['speak_probability']}%)")
 
+    # Iniciar servidor Webhook local para n8n en background
+    from tools.webhook_server import start_webhook
+    await start_webhook(bot, port=8899)
+
     await bot.start()
 
 

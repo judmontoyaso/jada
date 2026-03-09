@@ -1,0 +1,9 @@
+[
+  {
+    "estrategia": "Ejecutar las herramientas solicitadas explícitamente por el usuario en lugar de asumir o responder verbalmente sin verificar",
+    "cuando_usar": "Cuando el usuario pide una acción específica que requiere usar una herramienta (como email_list)",
+    "importancia": "alta",
+    "added_at": "2026-03-07T12:00:40.669794",
+    "refinamientos": 0
+  }
+]
