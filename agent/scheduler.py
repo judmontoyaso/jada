@@ -88,11 +88,12 @@ class JadaScheduler:
         job_id: str,
         name: str,
         cron_expr: str,
-        prompt: str,
-        room_id: str,
+        prompt: str = "",
+        room_id: str = "",
         description: str = "",
         timezone_str: str = "UTC",
         enabled: bool = True,
+        workflow_id: str = "",
     ) -> dict:
         """
         Agrega un nuevo cronjob.
@@ -101,9 +102,10 @@ class JadaScheduler:
             job_id: ID único del job
             name: Nombre legible
             cron_expr: Expresión cron estándar ("0 6 * * *" = todos los días a las 6am)
-            prompt: Prompt que se enviará al agente cuando venza
+            prompt: Prompt que se enviará al agente (legado)
             room_id: ID del room de Matrix donde responder
             timezone_str: Timezone (default: UTC)
+            workflow_id: ID del workflow determinista (reemplaza al prompt)
         """
         if not validate_cron_expr(cron_expr):
             raise ValueError(f"Expresión cron inválida: '{cron_expr}'")
@@ -126,6 +128,7 @@ class JadaScheduler:
             "name": name,
             "cron_expr": cron_expr,
             "prompt": prompt,
+            "workflow_id": workflow_id,
             "room_id": room_id,
             "description": description,
             "timezone": timezone_str,
@@ -259,7 +262,8 @@ class JadaScheduler:
         """Ejecuta un cronjob: llama al agente con el prompt del job."""
         job_id = job["id"]
         name = job["name"]
-        prompt = job["prompt"]
+        prompt = job.get("prompt", "")
+        workflow_id = job.get("workflow_id", "")
         room_id = job.get("room_id", "")
 
         logger.info(f"⏰ Ejecutando cronjob '{name}' (id={job_id})")
@@ -283,9 +287,21 @@ class JadaScheduler:
 
         self._save()
 
-        # Llamar al agente
+        # Llamar al agente o al motor de workflows
         try:
-            if prompt == "__heartbeat__":
+            if workflow_id:
+                from agent.workflows import get_workflow_engine
+                if self._agent is None:
+                    logger.warning(f"⚠️ Workflow '{workflow_id}': agent no inicializado aún, fallando.")
+                    raise ValueError("Agent no inicializado")
+                
+                engine = get_workflow_engine(self._agent._tools, self._send_callback)
+                result = await engine.run(workflow_id, room_id)
+                
+                if self._send_callback:
+                    await self._send_callback(room_id, result)
+                    
+            elif prompt == "__heartbeat__":
                 from agent.heartbeat import run_heartbeat
                 if self._agent is None:
                     logger.warning("⚠️ Heartbeat: agent no inicializado aún, saltando")
@@ -297,8 +313,10 @@ class JadaScheduler:
                 await run_heartbeat(agent=self._agent, send_callback=send_cb, room_id=room_id, voice_callback=voice_cb)
             else:
                 await self._callback(prompt, room_id)
+                
             self._jobs[job_id]["last_status"] = "success"
             logger.info(f"✅ Cronjob '{name}' ejecutado exitosamente")
+            
         except Exception as e:
             self._jobs[job_id]["last_status"] = "error"
             logger.error(f"❌ Error ejecutando cronjob '{name}': {e}")

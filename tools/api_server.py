@@ -145,7 +145,144 @@ def get_recent_metrics(limit: int = 50):
         return [] # Table might be empty
     finally:
         conn.close()
+class DailyMetric(BaseModel):
+    date: str
+    total_tokens: int
+    total_runs: int
+    avg_latency_s: float
 
+@app.get("/api/v1/metrics/daily", response_model=List[DailyMetric], tags=["Metrics"])
+def get_daily_metrics(days: int = 7):
+    """Returns aggregated token usage and run counts grouped by day."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # SQLite date() function extracts YYYY-MM-DD from the ISO8601 created_at string
+        cursor.execute("""
+            SELECT 
+                date(created_at) as run_date,
+                SUM(total_tokens) as tokens,
+                COUNT(*) as runs,
+                AVG(latency_s) as avg_latency
+            FROM run_metrics 
+            GROUP BY run_date
+            ORDER BY run_date DESC
+            LIMIT ?
+        """, (days,))
+        
+        return [
+            DailyMetric(
+                date=row["run_date"],
+                total_tokens=row["tokens"],
+                total_runs=row["runs"],
+                avg_latency_s=round(row["avg_latency"], 3) if row["avg_latency"] else 0.0
+            ) 
+            for row in cursor.fetchall() if row["run_date"]
+        ]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+
+class ModelSpeed(BaseModel):
+    model_id: str
+    total_runs: int
+    avg_latency_s: float
+    avg_total_time_s: float
+
+@app.get("/api/v1/metrics/models", response_model=List[ModelSpeed], tags=["Metrics"])
+def get_model_speeds():
+    """Returns average latency and processing times grouped by LLM model."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT 
+                model_id,
+                COUNT(*) as runs,
+                AVG(latency_s) as avg_latency,
+                AVG(total_time_s) as avg_total_time
+            FROM run_metrics 
+            GROUP BY model_id
+            ORDER BY runs DESC
+        """)
+        return [
+            ModelSpeed(
+                model_id=row["model_id"],
+                total_runs=row["runs"],
+                avg_latency_s=round(row["avg_latency"], 3) if row["avg_latency"] else 0.0,
+                avg_total_time_s=round(row["avg_total_time"], 3) if row["avg_total_time"] else 0.0
+            ) 
+            for row in cursor.fetchall() if row["model_id"]
+        ]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+
+class ToolUsage(BaseModel):
+    tool_name: str
+    times_used: int
+
+@app.get("/api/v1/metrics/tools", response_model=List[ToolUsage], tags=["Metrics"])
+def get_tools_usage():
+    """Parses tool usage and returns the ranking of most utilized tools."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT tools_used FROM run_metrics WHERE tools_used != '' AND tools_used IS NOT NULL")
+        tool_counts = {}
+        for row in cursor.fetchall():
+            tools_str = row["tools_used"]
+            for tool in tools_str.split(","):
+                tool = tool.strip()
+                if tool:
+                    tool_counts[tool] = tool_counts.get(tool, 0) + 1
+        
+        # Sort top 20 by usage
+        sorted_tools = sorted(tool_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+        return [ToolUsage(tool_name=k, times_used=v) for k, v in sorted_tools]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+
+@app.get("/api/v1/messages/{session_id}", response_model=List[RecentMessage], tags=["Data"])
+def get_session_messages(session_id: str):
+    """Returns the full conversation history for a specific room (session_id)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT runs FROM sessions WHERE session_id = ?", (session_id,))
+        row = cursor.fetchone()
+        
+        if not row or not row['runs']:
+            raise HTTPException(status_code=404, detail="Session not found or empty")
+            
+        runs_list = json.loads(row['runs'])
+        msgs = []
+        
+        for run in runs_list:
+            req = run.get('request', {})
+            resp = run.get('response', {})
+            
+            if req and req.get('content'):
+                msgs.append(RecentMessage(
+                    role="user",
+                    content=str(req['content']),
+                    room_id=session_id,
+                    timestamp=str(run.get('created_at', ''))
+                ))
+            if resp and resp.get('message', {}).get('content'):
+                msgs.append(RecentMessage(
+                    role="assistant",
+                    content=str(resp['message']['content']),
+                    room_id=session_id,
+                    timestamp=str(run.get('created_at', ''))
+                ))
+        return msgs
+    finally:
+        conn.close()
 @app.get("/api/v1/messages", response_model=List[RecentMessage], tags=["Data"])
 def get_recent_messages(limit: int = 20):
     """Returns the last messages from the chat history."""
@@ -196,10 +333,33 @@ def get_recent_logs(lines: int = 100):
         raise HTTPException(status_code=404, detail="Log file directly not found")
         
     try:
-        # Simple tail implementation
-        with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read().splitlines()
-            return {"lines": content[-lines:]}
+        # Efficient tail implementation to avoid loading massive files into RAM
+        with open(LOG_FILE, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            filesize = f.tell()
+            block_size = 1024
+            position = filesize
+            found_lines = []
+            
+            # Read from end to start
+            while position > 0 and len(found_lines) <= lines:
+                read_size = min(block_size, position)
+                position -= read_size
+                f.seek(position)
+                block = f.read(read_size)
+                
+                # Split and add
+                lines_in_block = block.split(b'\n')
+                
+                if found_lines:
+                    found_lines[0] = lines_in_block[-1] + found_lines[0]
+                    found_lines = lines_in_block[:-1] + found_lines
+                else:
+                    found_lines = lines_in_block
+                    
+            # Decode the required last 'lines' rows
+            content = [line.decode("utf-8", errors="replace") for line in found_lines[-lines:] if line]
+            return {"lines": content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not read logs: {e}")
 
