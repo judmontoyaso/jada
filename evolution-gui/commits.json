@@ -1,0 +1,367 @@
+[
+  {
+    "hash": "532c953",
+    "date": "2026-03-09 20:23:40 -0500",
+    "message": "feat: Add deterministic workflows and new API endpoints for metrics and session history."
+  },
+  {
+    "hash": "78f54f5",
+    "date": "2026-03-09 15:18:36 -0500",
+    "message": "feat: Replace the old dashboard with a new FastAPI API server and introduce LLM run metrics collection."
+  },
+  {
+    "hash": "574137f",
+    "date": "2026-03-09 14:27:24 -0500",
+    "message": "feat: Add heartbeat handling to agent, new playbook strategies, and Matrix voice message support."
+  },
+  {
+    "hash": "50b449d",
+    "date": "2026-03-08 20:28:16 -0500",
+    "message": "feat: Introduce webhook server, add file deletion tool, and include new playbook entry."
+  },
+  {
+    "hash": "2980f74",
+    "date": "2026-03-04 21:05:37 -0500",
+    "message": "feat: Add Reddit integration for fetching trending posts, subreddit content, and search results."
+  },
+  {
+    "hash": "6c96d82",
+    "date": "2026-03-04 17:02:38 -0500",
+    "message": "feat: Make the `media` tool asynchronous, expand its documentation to include PDF page analysis, and refine NVIDIA API call parameters while removing 'analiza' from the storage tool mapping."
+  },
+  {
+    "hash": "9619dab",
+    "date": "2026-03-04 16:44:34 -0500",
+    "message": "refactor: Delegate image-based PDF analysis to `describe_image` by removing internal vision logic and updating tool mappings."
+  },
+  {
+    "hash": "b20c117",
+    "date": "2026-03-04 16:24:29 -0500",
+    "message": "feat: Run image vision analysis in a separate thread with an increased timeout and associate the 'analiza' keyword with the storage tool."
+  },
+  {
+    "hash": "74710dd",
+    "date": "2026-03-04 16:13:48 -0500",
+    "message": "feat: Add PDF reading and analysis capabilities, including vision fallback for image-based PDFs, and enable file handling in the Matrix client."
+  },
+  {
+    "hash": "fc7745c",
+    "date": "2026-03-04 14:37:12 -0500",
+    "message": "feat: Add text cleaning for TTS to remove emojis, markdown, and extra symbols."
+  },
+  {
+    "hash": "e110e36",
+    "date": "2026-03-04 14:28:53 -0500",
+    "message": "feat: Implement voice response functionality by detecting user intent, stripping voice commands, and routing messages to the agent with a `voice_only` flag."
+  },
+  {
+    "hash": "e6bd545",
+    "date": "2026-03-04 14:16:24 -0500",
+    "message": "feat: Expand voice command detection and strip audio request instructions from messages sent to the agent."
+  },
+  {
+    "hash": "940b691",
+    "date": "2026-03-04 14:09:02 -0500",
+    "message": "feat: Implement multi-LLM routing for tools, add text-to-speech output, and expand the agent's toolset."
+  },
+  {
+    "hash": "93fe952",
+    "date": "2026-03-04 12:16:02 -0500",
+    "message": "feat: Add Supabase S3 file storage tools to the agent, enabling upload, list, download, and delete operations."
+  },
+  {
+    "hash": "1f4e30d",
+    "date": "2026-03-04 11:15:24 -0500",
+    "message": "refactor: improve agent search  JSON parsing, clean web search snippets, reduce agent history context, silence noisy logs, simplify user profile, and remove an old sprint plan."
+  },
+  {
+    "hash": "03a8b93",
+    "date": "2026-03-04 10:05:08 -0500",
+    "message": "feat: Migrated embedding router to NVIDIA NIM API with disk-cached tool centroids and introduced a new playbook module."
+  },
+  {
+    "hash": "36d4338",
+    "date": "2026-03-04 08:57:29 -0500",
+    "message": "feat: integrate Nvidia models, implement background task execution, persist reminders with MongoDB, and refine LLM response cleaning."
+  },
+  {
+    "hash": "da47b0b",
+    "date": "2026-03-04 11:27:09 +0000",
+    "message": "feat: Implement semantic tool group routing with embeddings as a fallback for keyword-based intent detection."
+  },
+  {
+    "hash": "b4f7ab8",
+    "date": "2026-03-04 03:14:42 +0000",
+    "message": "feat: Implement tool group routing for dynamic agent tool loading, update LLM models, and refine current time retrieval."
+  },
+  {
+    "hash": "4774d72",
+    "date": "2026-03-04 02:44:38 +0000",
+    "message": "feat: Implement audio message transcription via Groq Whisper with ffmpeg chunking and refactor agent system prompt for clarity."
+  },
+  {
+    "hash": "969c854",
+    "date": "2026-03-04 02:04:27 +0000",
+    "message": "feat: document new Coordinator + ReAct pattern, OpenAI LLM stack, and expanded toolset."
+  },
+  {
+    "hash": "fa19916",
+    "date": "2026-03-04 01:57:57 +0000",
+    "message": "feat: Migrate LLM provider from Nvidia to OpenAI and refactor agent architecture to dynamically select specialized agents based on message intent."
+  },
+  {
+    "hash": "fcd6e64",
+    "date": "2026-03-02 02:16:29 +0000",
+    "message": "feat: Implement natural language time parsing for the `set_reminder` tool, integrate reminder notifications, and update agent instructions and context management."
+  },
+  {
+    "hash": "952b8b4",
+    "date": "2026-03-02 01:39:29 +0000",
+    "message": "feat: Implement SmartThings token auto-refresh and refactor agent to use specialized LLMs for chat, function, and vision, while simplifying email reading logic."
+  },
+  {
+    "hash": "7735b14",
+    "date": "2026-03-01 17:19:44 +0000",
+    "message": "Merge origin/feature/migration-agno into main: Resolve conflicts and complete Agno migration"
+  },
+  {
+    "hash": "fb3f1e2",
+    "date": "2026-03-01 12:10:20 -0500",
+    "message": "feat: Introduce agent core with IMAP email reader, summarizer, and deep think tools."
+  },
+  {
+    "hash": "8028c55",
+    "date": "2026-02-28 22:40:19 -0500",
+    "message": "feat: Implement new agent architecture with Agno integration, core components, image generation, email reading tools, and comprehensive tests."
+  },
+  {
+    "hash": "60d7144",
+    "date": "2026-02-28 22:40:00 -0500",
+    "message": "feat: Introduce Agno agent framework with centralized tool registration, new agent components, and expanded toolset."
+  },
+  {
+    "hash": "75f2591",
+    "date": "2026-02-28 17:10:46 +0000",
+    "message": "fix: resolve memory leak, repetitive emails, and hallucinated summaries"
+  },
+  {
+    "hash": "0aa39d3",
+    "date": "2026-02-27 18:09:51 -0500",
+    "message": "Merge branch 'main' into feature/migration-agno"
+  },
+  {
+    "hash": "63ef686",
+    "date": "2026-02-27 18:04:08 -0500",
+    "message": "chore: save current state before agno migration"
+  },
+  {
+    "hash": "8f7df2d",
+    "date": "2026-02-27 22:53:57 +0000",
+    "message": "feat: google calendar api integration, news/weather fixes and code cleanup"
+  },
+  {
+    "hash": "fe97f52",
+    "date": "2026-02-27 15:05:24 -0500",
+    "message": "docs: add Agno to stack table"
+  },
+  {
+    "hash": "37d4a71",
+    "date": "2026-02-27 14:38:34 -0500",
+    "message": "chore: add deploy.sh for Digital Ocean setup"
+  },
+  {
+    "hash": "d705bad",
+    "date": "2026-02-27 14:37:36 -0500",
+    "message": "docs: README completo para Jada v0.5.2"
+  },
+  {
+    "hash": "3c51b6e",
+    "date": "2026-02-27 14:32:15 -0500",
+    "message": "merge: feature/migracion-jada -> main (Jada v0.5.2)"
+  },
+  {
+    "hash": "924f9bd",
+    "date": "2026-02-27 14:19:22 -0500",
+    "message": "feat: heartbeat reads soul.md + heartbeat.md tone section for LLM"
+  },
+  {
+    "hash": "d389423",
+    "date": "2026-02-27 14:15:52 -0500",
+    "message": "fix: scheduler recalculates next_run_at if null or >7d away"
+  },
+  {
+    "hash": "fbf7116",
+    "date": "2026-02-27 14:12:26 -0500",
+    "message": "fix: email_list in CORE_TOOLS + keyword expansion"
+  },
+  {
+    "hash": "a6c2ce5",
+    "date": "2026-02-27 14:08:15 -0500",
+    "message": "chore: gitignore + untrack runtime files"
+  },
+  {
+    "hash": "fd1a03a",
+    "date": "2026-02-27 14:03:27 -0500",
+    "message": "fix: kimi-k2-thinking primary + minimax fallback + max_tokens param"
+  },
+  {
+    "hash": "20e25c9",
+    "date": "2026-02-27 13:56:55 -0500",
+    "message": "feat: Kimi K2 primary model + full soul.md in context + better rules"
+  },
+  {
+    "hash": "dd75add",
+    "date": "2026-02-27 13:48:05 -0500",
+    "message": "feat: watchdog timeout + nudge messages for slow LLM calls"
+  },
+  {
+    "hash": "4aa5944",
+    "date": "2026-02-27 13:41:22 -0500",
+    "message": "fix: typing_state= not typing= in room_typing (nio API)"
+  },
+  {
+    "hash": "058a184",
+    "date": "2026-02-27 13:39:19 -0500",
+    "message": "fix: cronjob tools always in CORE_TOOLS + explicit workflow in schemas"
+  },
+  {
+    "hash": "007e033",
+    "date": "2026-02-27 13:33:49 -0500",
+    "message": "fix: add cancela/pausa/elimina keywords to cronjob routing"
+  },
+  {
+    "hash": "14a5f5a",
+    "date": "2026-02-27 13:30:41 -0500",
+    "message": "fix: heartbeat cron 5-field + dashboard UI polish"
+  },
+  {
+    "hash": "dc674c8",
+    "date": "2026-02-27 13:29:08 -0500",
+    "message": "feat: dashboard Next.js + heartbeat + soul con personalidad"
+  },
+  {
+    "hash": "e6513c9",
+    "date": "2026-02-27 13:21:31 -0500",
+    "message": "feat: Next.js dashboard + heartbeat + personality"
+  },
+  {
+    "hash": "f47a9cc",
+    "date": "2026-02-27 13:12:44 -0500",
+    "message": "feat: personality + heartbeat + typing fix"
+  },
+  {
+    "hash": "e5378e9",
+    "date": "2026-02-27 12:59:41 -0500",
+    "message": "fix: cronjob deduplication + clean duplicate from JSON"
+  },
+  {
+    "hash": "c5b8698",
+    "date": "2026-02-27 12:53:28 -0500",
+    "message": "fix: double response + typing indicator + cronjob keywords"
+  },
+  {
+    "hash": "d9db084",
+    "date": "2026-02-27 12:45:55 -0500",
+    "message": "chore: banner — 'powered by NVIDIA NIM' -> '5panes'"
+  },
+  {
+    "hash": "a2134e6",
+    "date": "2026-02-27 12:44:29 -0500",
+    "message": "feat: --livelogs mode + dispatcher singleton optimization"
+  },
+  {
+    "hash": "568dd4b",
+    "date": "2026-02-27 12:30:35 -0500",
+    "message": "feat(phase6): enhanced memory with auto-compression + fact deduplication"
+  },
+  {
+    "hash": "fdf3f20",
+    "date": "2026-02-27 12:07:12 -0500",
+    "message": "feat(phase5): agent-level scheduler with asyncio + Agno cron utilities"
+  },
+  {
+    "hash": "5a24a4f",
+    "date": "2026-02-27 11:57:23 -0500",
+    "message": "feat(phase4): replace manual JSON schemas with compact _fn() helper"
+  },
+  {
+    "hash": "acf1461",
+    "date": "2026-02-27 11:46:23 -0500",
+    "message": "feat(phase3): migrate LLM client to Agno Nvidia model provider"
+  },
+  {
+    "hash": "3d17f24",
+    "date": "2026-02-27 11:29:26 -0500",
+    "message": "chore: cleanup merged branches + rename remaining MiniClaw refs to Jada"
+  },
+  {
+    "hash": "4ad6a9b",
+    "date": "2026-02-27 11:22:09 -0500",
+    "message": "Merge remote-tracking branch 'remotes/origin/feature/cronjobs-gui' into feature/migracion-jada"
+  },
+  {
+    "hash": "3ea1ba8",
+    "date": "2026-02-27 11:21:55 -0500",
+    "message": "Merge remote-tracking branch 'remotes/origin/security-audit-2026-02-25' into feature/migracion-jada"
+  },
+  {
+    "hash": "88368fe",
+    "date": "2026-02-27 11:21:44 -0500",
+    "message": "feat: rename project MiniClaw -> Jada + add ASCII startup banner"
+  },
+  {
+    "hash": "b65785e",
+    "date": "2026-02-26 11:46:33 +0000",
+    "message": "feat(cronjobs): Completar feature de gestión de cronjobs con GUI"
+  },
+  {
+    "hash": "87d4521",
+    "date": "2026-02-26 10:08:15 +0000",
+    "message": "feat(cronjobs): Implementar backend completo de gestión de cronjobs"
+  },
+  {
+    "hash": "d5ce88a",
+    "date": "2026-02-25 11:06:48 +0000",
+    "message": "security: Change to WHITELIST mode for commands"
+  },
+  {
+    "hash": "76115ad",
+    "date": "2026-02-25 10:40:06 +0000",
+    "message": "security: Fix rm -rf blocking bug"
+  },
+  {
+    "hash": "122abac",
+    "date": "2026-02-25 10:26:20 +0000",
+    "message": "security: Add security improvements and policies"
+  },
+  {
+    "hash": "a35432f",
+    "date": "2026-02-24 21:32:22 -0500",
+    "message": "Merge branch 'main' of https://github.com/judmontoyaso/mini_claw"
+  },
+  {
+    "hash": "c482274",
+    "date": "2026-02-24 21:32:16 -0500",
+    "message": "feat: Add a new `gym_db` tool for MongoDB-based gym workout management and update MongoDB URI examples in configuration files."
+  },
+  {
+    "hash": "680b3d8",
+    "date": "2026-02-24 21:04:09 -0500",
+    "message": "Delete monitor-correo.ps1"
+  },
+  {
+    "hash": "52ec3d6",
+    "date": "2026-02-24 18:04:47 -0500",
+    "message": "feat: Add deep thinking sub-agent and Samsung TV control tool, alongside a new agent core with categorized tool loading."
+  },
+  {
+    "hash": "b46d1c0",
+    "date": "2026-02-24 16:45:52 -0500",
+    "message": "feat: Add SmartThings TV control, email monitoring, and a deep thinking agent."
+  },
+  {
+    "hash": "17c0f69",
+    "date": "2026-02-24 12:52:47 -0500",
+    "message": "feat: Implement the initial ReAct agent architecture, including core logic, persistent memory, and a suite of tools."
+  }
+]

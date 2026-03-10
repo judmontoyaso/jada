@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masterclass: Evolución de un Agente IA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <header class="hero">
+        <div class="hacker-terminal">
+            <div class="scanlines"></div>
+            <div class="terminal-header">
+                <div class="terminal-button red"></div>
+                <div class="terminal-button yellow"></div>
+                <div class="terminal-button green"></div>
+                <div class="terminal-title">root@vps:~ /opt/jada</div>
+            </div>
+            <div class="terminal-body" id="terminal-body">
+                <div id="ascii-art"></div>
+                <div id="terminal-text"></div>
+                <span class="cursor">_</span>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <div class="mouse">
+                <div class="wheel"></div>
+            </div>
+            <p>Baja para empezar la clase</p>
+        </div>
+    </header>
+
+    <main class="timeline-container">
+        <div class="timeline-line"></div>
+        <div id="timeline-events" class="timeline-events"></div>
+    </main>
+
+    <footer>
+        <p>Construida con ❤️, eficiencia de tokens, y mucho sarcasmo. — 5panes</p>
+    </footer>
+
+    <!-- Rough Notation for hand-drawn animations -->
+    <script src="https://unpkg.com/rough-notation/lib/rough-notation.iife.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
