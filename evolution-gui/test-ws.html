@@ -1,0 +1,14 @@
+<!DOCTYPE html><html><body><script>
+async function test() {
+    const res = await fetch("/assemblyai/token");
+    const { token } = await res.json();
+    const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&token=${token}&speech_model=best`;
+    console.log("Connecting to", wsUrl);
+    
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (m) => console.log("Received:", JSON.parse(m.data));
+    ws.onerror = (e) => console.error("Error:", e);
+    ws.onclose = (c) => console.log("Closed:", c.code, c.reason);
+}
+test();
+</script></body></html>

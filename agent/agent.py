@@ -32,6 +32,7 @@ FUNCTION_MODEL = os.getenv("OPENAI_FUNCTION_MODEL", "gpt-5-mini")
 VISION_MODEL = os.getenv("NVIDIA_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
 NVIDIA_MODEL = os.getenv("NVIDIA_FUNCTION_MODEL", "minimaxai/minimax-m2.5")
 FALLBACK_MODEL = os.getenv("OPENAI_FALLBACK_MODEL", "gpt-4.1")
+MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "minimaxai/minimax-m2.5")
 
 logger = logging.getLogger("jada")
 
@@ -178,15 +179,13 @@ class Agent:
         
         self._llm_call_timeout = int(os.getenv("LLM_TIMEOUT", "45"))
 
-        self.primary_model = OpenAIChat(
-            id=FUNCTION_MODEL,
-            api_key=os.getenv("OPENAI_API_KEY"),
-            max_retries=1,
-            timeout=self._llm_call_timeout,
+        self.primary_model = Nvidia(
+            id=MINIMAX_MODEL,
+            api_key=os.getenv("NVIDIA_API_KEY_SECONDARY")
         )
-        self.fallback_model = OpenAIChat(
-            id=FALLBACK_MODEL,
-            api_key=os.getenv("OPENAI_API_KEY"),
+        self.fallback_model = Nvidia(
+            id=MINIMAX_MODEL,
+            api_key=os.getenv("NVIDIA_API_KEY_SECONDARY"),
             max_retries=1,
             timeout=self._llm_call_timeout,
         )

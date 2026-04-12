@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jada Voice - Interactive Matrix</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #e0e0e0;
+            --primary-accent: #9d4edd;
+            --secondary-accent: #3a86ff;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --orb-size: 180px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ----- BACKGROUND BLOBS ----- */
+        .ambient-blob {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: -1;
+            opacity: 0.4;
+            animation: drift 15s infinite alternate ease-in-out;
+        }
+
+        .blob-1 {
+            background: var(--primary-accent);
+            top: 10%;
+            left: 10%;
+        }
+
+        .blob-2 {
+            background: var(--secondary-accent);
+            bottom: 10%;
+            right: 10%;
+            animation-delay: -5s;
+        }
+
+        @keyframes drift {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(50px, -30px) scale(1.1);
+            }
+
+            100% {
+                transform: translate(-40px, 40px) scale(0.9);
+            }
+        }
+
+        /* ----- MAIN CONTAINER ----- */
+        .container {
+            width: 90%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--secondary-accent), var(--primary-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-top: 0.5rem;
+            display: inline-block;
+            transition: color 0.3s ease;
+        }
+
+        /* ----- ORB VISUALIZER ----- */
+        .orb-container {
+            position: relative;
+            width: var(--orb-size);
+            height: var(--orb-size);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 3rem 0;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .orb-container:hover {
+            transform: scale(1.05);
+        }
+
+        .orb {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+            box-shadow:
+                0 0 30px rgba(157, 78, 221, 0.5),
+                inset 0 0 20px rgba(58, 134, 255, 0.5);
+            transition: all 0.4s ease;
+            position: absolute;
+        }
+
+        /* Voice States */
+        .state-idle .orb {
+            animation: breathe 4s infinite ease-in-out;
+            background: radial-gradient(circle at 30% 30%, rgba(100, 100, 100, 0.4), rgba(0, 0, 0, 0));
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+
+        .state-listening .orb {
+            box-shadow:
+                0 0 40px var(--secondary-accent),
+                inset 0 0 30px #fff;
+            background: radial-gradient(circle at 30% 30%, #fff, rgba(255, 255, 255, 0));
+            animation: pulse-listening 1.5s infinite alternate ease-in-out;
+        }
+
+        .state-processing .orb {
+            background: var(--primary-accent);
+            animation: spin-thinking 1s infinite linear;
+            border: 2px dashed rgba(255, 255, 255, 0.5);
+        }
+
+        .state-speaking .orb {
+            box-shadow:
+                0 0 50px var(--primary-accent),
+                inset 0 0 40px var(--secondary-accent);
+            animation: pulse-speaking 0.4s infinite alternate ease-in-out;
+        }
+
+        /* Waves behind the orb */
+        .waves {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .state-listening .waves {
+            animation: ripple 2s infinite ease-out;
+        }
+
+        /* Keyframes */
+        @keyframes breathe {
+            0% {
+                transform: scale(0.95);
+                opacity: 0.8;
+            }
+
+            50% {
+                transform: scale(1.0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(0.95);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes pulse-listening {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 20px var(--secondary-accent);
+            }
+
+            100% {
+                transform: scale(1.1);
+                box-shadow: 0 0 50px var(--secondary-accent);
+            }
+        }
+
+        @keyframes spin-thinking {
+            0% {
+                transform: rotate(0deg) scale(0.9);
+            }
+
+            50% {
+                transform: rotate(180deg) scale(0.95);
+            }
+
+            100% {
+                transform: rotate(360deg) scale(0.9);
+            }
+        }
+
+        @keyframes pulse-speaking {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 20px var(--primary-accent);
+            }
+
+            100% {
+                transform: scale(1.15);
+                box-shadow: 0 0 60px var(--secondary-accent);
+            }
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(1);
+                opacity: 0.6;
+            }
+
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+
+        /* ----- GLASS TRANSCRIPT BOX ----- */
+        .transcript-box {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            width: 100%;
+            min-height: 120px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: center;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .transcript-text {
+            font-size: 1.1rem;
+            line-height: 1.5;
+            color: #ddd;
+            margin: 0;
+            font-weight: 300;
+        }
+
+        /* Custom Scrollbar for transcript box */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .hint {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #666;
+            text-align: center;
+        }
+
+        .icon-mic {
+            position: absolute;
+            font-size: 2rem;
+            color: white;
+            z-index: 2;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.3s;
+        }
+
+        .state-processing .icon-mic,
+        .state-speaking .icon-mic {
+            opacity: 0;
+        }
+    </style>
+</head>
+
+<body class="state-idle" id="app-body">
+
+    <!-- Ambient background -->
+    <div class="ambient-blob blob-1"></div>
+    <div class="ambient-blob blob-2"></div>
+
+    <div class="container">
+        <header>
+            <h1>JADA VOICE</h1>
+            <div class="status-badge" id="status-text">Toca el orbe para iniciar</div>
+        </header>
+
+        <div class="orb-container" id="orb-btn">
+            <div class="waves"></div>
+            <div class="orb"></div>
+            <!-- Simple SVG Mic Icon -->
+            <svg class="icon-mic" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+        </div>
+
+        <div class="transcript-box">
+            <p class="transcript-text" id="transcript-display">Hola. Estoy lista cuando tú lo estés.</p>
+        </div>
+
+        <div class="hint">Asegúrate de conceder permisos de micrófono al navegador.</div>
+    </div>
+
+    <script>
+        const appBody = document.getElementById('app-body');
+        const orbBtn = document.getElementById('orb-btn');
+        const statusText = document.getElementById('status-text');
+        const transcriptDisplay = document.getElementById('transcript-display');
+
+        // IP of the VPS and Voice bridge port
+        // Changed to use the secure tunnel to avoid Mixed Content (HTTPS -> HTTP) blocks in browser
+        const API_URL = `https://jada-api-beta.loca.lt/jada/chat`;
+
+        let isListening = false;
+        let finalTranscriptStr = "";
+        const synth = window.speechSynthesis;
+
+        // AssemblyAI WebSockets Streaming Variables
+        let ws;
+        let audioContext;
+        let processor;
+        let globalStream;
+        let messageCompleteTimeout;
+
+        async function initAssemblyAI() {
+            if (isListening || ws) return;
+
+            setState('processing');
+            statusText.innerText = "CONECTANDO A ASSEMBLY AI...";
+
+            // Browser trick: initialize voices on user interaction
+            synth.getVoices();
+            synth.cancel();
+
+            try {
+                // 1. Get Temporary Token from our Bridge
+                const tokenUrl = API_URL.replace('/jada/chat', '/assemblyai/token');
+                const tokenResponse = await fetch(tokenUrl);
+                const tokenData = await tokenResponse.json();
+
+                if (!tokenData.token) throw new Error("No token received");
+
+                // 2. Open WebSocket
+                // Universal Streaming model strictly requires a valid streaming language profile like 'universal-streaming-multilingual'
+                ws = new WebSocket(`wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&token=${tokenData.token}&speech_model=universal-streaming-multilingual`);
+
+                ws.onopen = async () => {
+                    // 3. Start Recording
+                    // Handle older browsers or insecure contexts where mediaDevices is blocked
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error("El navegador bloqueó el acceso al micrófono. Debes acceder vía HTTPS o Localhost.");
+                    }
+
+                    globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    // AssemblyAI V3 strictly requires 16000 sample rate
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+
+                    // Create an inline AudioWorkletProcessor using a Blob to avoid serving an external JS file
+                    const workletCode = `
+                        class PCMProcessor extends AudioWorkletProcessor {
+                            constructor() {
+                                super();
+                                // Create a 250ms buffer (4000 samples at 16000Hz)
+                                this.bufferSize = 4000;
+                                this.buffer = new Int16Array(this.bufferSize);
+                                this.offset = 0;
+                            }
+                            process(inputs) {
+                                const input = inputs[0];
+                                if (input.length > 0) {
+                                    const channelData = input[0];
+                                    for (let i = 0; i < channelData.length; i++) {
+                                        const s = Math.max(-1, Math.min(1, channelData[i]));
+                                        this.buffer[this.offset] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                                        this.offset++;
+                                        
+                                        // Once the buffer reaches 250ms, transmit to WebSocket thread
+                                        if (this.offset >= this.bufferSize) {
+                                            const chunk = new Int16Array(this.buffer);
+                                            this.port.postMessage(chunk.buffer, [chunk.buffer]);
+                                            this.offset = 0;
+                                        }
+                                    }
+                                }
+                                return true;
+                            }
+                        }
+                        registerProcessor('pcm-processor', PCMProcessor);
+                    `;
+
+                    const blob = new Blob([workletCode], { type: 'application/javascript' });
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    await audioContext.audioWorklet.addModule(blobUrl);
+                    URL.revokeObjectURL(blobUrl);
+
+                    const inputSource = audioContext.createMediaStreamSource(globalStream);
+                    processor = new AudioWorkletNode(audioContext, 'pcm-processor');
+
+                    processor.port.onmessage = (e) => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            // AssemblyAI Universal-3 expects raw binary buffers (16-bit PCM Signed Little-Endian)
+                            ws.send(e.data);
+                        }
+                    };
+
+                    inputSource.connect(processor);
+                    // Do not connect the processor to destination to avoid audio feedback loop
+
+                    isListening = true;
+                    finalTranscriptStr = "";
+                    setState('listening');
+                    statusText.innerText = "ESCUCHANDO... (TOCA PARA ENVIAR)";
+                    transcriptDisplay.innerText = "Habla ahora...";
+                };
+
+                ws.onmessage = (message) => {
+                    const res = JSON.parse(message.data);
+                    console.log("WS Message:", res);
+                    resetInactivityTimeout();
+
+                    if (res.message_type === 'SessionBegins' || res.type === 'Begin') {
+                        statusText.innerText = "ESCUCHANDO... (TOCA PARA ENVIAR)";
+                        return;
+                    }
+
+                    // V3 Universal Streaming uses 'transcript', V2 uses 'text'
+                    const text = res.transcript !== undefined ? res.transcript : (res.text !== undefined ? res.text : null);
+                    if (text === null) return;
+
+                    // Detect final chunk of a sentence
+                    const isFinal = res.end_of_turn === true || res.message_type === 'FinalTranscript';
+
+                    if (isFinal) {
+                        if (text.trim() !== "") {
+                            finalTranscriptStr += " " + text;
+                            transcriptDisplay.innerText = finalTranscriptStr.trim();
+                        }
+                    } else {
+                        // Partial chunk
+                        transcriptDisplay.innerText = (finalTranscriptStr + " " + text).trim() || "...";
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    console.error("WS Error detailed:", err);
+                    statusText.innerText = "ERROR DE CONEXIÓN A ASSEMBLYAI";
+                    stopAssemblyAI(true);
+                };
+
+                ws.onclose = (e) => {
+                    console.log("WS Closed - Code:", e.code, "Reason:", e.reason);
+                    if (e.code !== 1000 && e.code !== 1005) {
+                        // Only show error for unexpected disconnections
+                        statusText.innerText = "ERROR DE CONEXIÓN A ASSEMBLYAI";
+                        stopAssemblyAI(true);
+                    } else {
+                        // Normal or timeout auto-close (1000 or 1005)
+                        stopAssemblyAI(false);
+                        statusText.innerText = "TOCA EL ORBE PARA HABLAR";
+                    }
+                };
+            } catch (e) {
+                console.error("AssemblyAI Auth Error:", e);
+                statusText.innerText = "ERROR AL AUTENTICAR CON ASSEMBLYAI";
+                setState('idle');
+            }
+        }
+
+        function stopAssemblyAI(isError = false) {
+            if (!isListening) return;
+            isListening = false;
+
+            clearTimeout(messageCompleteTimeout);
+
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+            if (globalStream) {
+                globalStream.getTracks().forEach(track => track.stop());
+                globalStream = null;
+            }
+            if (ws) {
+                // Send terminate before closing
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ terminate_session: true }));
+                }
+                ws.close();
+                ws = null;
+            }
+
+            if (isError) {
+                setState('idle');
+                return;
+            }
+
+            // Send payload to JADA
+            if (finalTranscriptStr.trim()) {
+                sendToAgent(finalTranscriptStr.trim());
+            } else {
+                setState('idle');
+                statusText.innerText = "TOCA EL ORBE PARA INICIAR";
+                transcriptDisplay.innerText = "No se detectó ninguna voz.";
+            }
+        }
+
+        function resetInactivityTimeout() {
+            clearTimeout(messageCompleteTimeout);
+            // Auto stop if 3 seconds pass without speech events as a fallback
+            messageCompleteTimeout = setTimeout(() => {
+                if (isListening && finalTranscriptStr.trim().length > 3) stopAssemblyAI(false);
+            }, 3500);
+        }
+
+        // Handle orb click
+        orbBtn.addEventListener('click', () => {
+            if (isListening) {
+                // Tap again to stop and send
+                stopAssemblyAI(false);
+            } else {
+                // Tap to initiate
+                initAssemblyAI();
+            }
+        });
+
+        // Backend Bridge Logic
+        async function sendToAgent(messageText) {
+            setState('processing');
+            statusText.innerText = "PROCESANDO / PENSANDO...";
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Truncate response if too long so the box doesn't blow up (or animate it)
+                transcriptDisplay.innerText = data.response;
+                speakResponse(data.response);
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                transcriptDisplay.innerText = "Oops. No me pude conectar con el servidor.";
+                setState('idle');
+                statusText.innerText = "ERROR DE CONEXIÓN";
+            }
+        }
+
+        // Text To Speech logic
+        function speakResponse(text) {
+            setState('speaking');
+            statusText.innerText = "JADA ESTÁ HABLANDO...";
+
+            // Strip out emojis or markdown asterisks so the TTS engine doesn't read them weirdly
+            let cleanText = text.replace(/[*_#]/g, '').replace(/[\u{1F300}-\u{1F9FF}]/gu, '');
+
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'es-ES';
+            utterance.pitch = 1.0;
+            utterance.rate = 1.0;
+
+            // Attempt to find a female Spanish voice
+            const voices = synth.getVoices();
+            const esVoice = voices.find(voice => voice.lang.startsWith('es') && (voice.name.includes('Lola') || voice.name.includes('Siri') || voice.name.includes('Monica') || voice.name.includes('Female')));
+            if (esVoice) utterance.voice = esVoice;
+
+            utterance.onend = function () {
+                setState('idle');
+                statusText.innerText = "TOCA EL ORBE PARA INICIAR";
+            };
+
+            utterance.onerror = function (e) {
+                console.error("TTS Error:", e);
+                setState('idle');
+                statusText.innerText = "TOCA EL ORBE PARA INICIAR";
+            };
+
+            synth.speak(utterance);
+        }
+
+        // State Machine UI helper
+        function setState(state) {
+            appBody.classList.remove('state-idle', 'state-listening', 'state-processing', 'state-speaking');
+            appBody.classList.add(`state-${state}`);
+        }
+    </script>
+</body>
+
+</html>

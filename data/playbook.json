@@ -1,10 +1,11 @@
 [
   {
-    "estrategia": "Ejecutar las herramientas solicitadas explícitamente por el usuario en lugar de asumir o responder verbalmente sin verificar",
-    "cuando_usar": "Cuando el usuario pide una acción específica que requiere usar una herramienta (como email_list)",
+    "estrategia": "Ejecutar las herramientas explícitamente solicitadas antes de dar respuestas verbales. El usuario pidió usar 'email_list' con parámetros específicos, pero Jada no ejecutó la herramienta y respondió basándose en conocimiento previo o suposición.",
+    "cuando_usar": "Cuando el usuario solicita explícitamente el uso de una herramienta específica con parámetros definidos",
     "importancia": "alta",
     "added_at": "2026-03-07T12:00:40.669794",
-    "refinamientos": 0
+    "refinamientos": 5,
+    "updated_at": "2026-04-09T00:00:59.835959"
   },
   {
     "estrategia": "Mostrar los resultados crudos de las herramientas antes de dar conclusiones",
@@ -14,10 +15,33 @@
     "refinamientos": 0
   },
   {
-    "estrategia": "Cuando una herramienta falla, proporcionar detalles específicos del error (código, mensaje, causa raíz) y posibles workarounds en lugar de solo reportar 'hubo un error'",
-    "cuando_usar": "Cuando cualquier tool retorna un error o falla en ejecutar una acción",
+    "estrategia": "Cuando una herramienta falla, informar al usuario claramente sobre el error y ofrecer alternativas o confirmar si desea intentar de nuevo",
+    "cuando_usar": "Cuando cualquier tool falla durante una interacción",
     "importancia": "alta",
     "added_at": "2026-03-09T12:02:28.394337",
+    "refinamientos": 1,
+    "updated_at": "2026-04-12T13:18:34.737433"
+  },
+  {
+    "estrategia": "No asumir acciones que el usuario no ha solicitado. Antes de ofrecer crear carpetas o mover archivos, confirmar qué quiere hacer el usuario",
+    "cuando_usar": "Cuando el usuario indica que algo no existe (como una carpeta) y no ha solicitado explícitamente una acción correctiva",
+    "importancia": "media",
+    "added_at": "2026-03-10T16:22:35.415062",
     "refinamientos": 0
+  },
+  {
+    "estrategia": "Cuando el usuario especifica criterios de exclusión (ej: 'no notificaciones automáticas'), aplicar esos filtros estrictamente aunque el contenido parezca relevante o 'real'. Las notificaciones de transacciones bancarias son notificaciones automáticas independientemente de su contenido.",
+    "cuando_usar": "Cuando el usuario define filtros negativos explícitos (no X, no Y) para una búsqueda o filtrado de contenido",
+    "importancia": "media",
+    "added_at": "2026-03-20T15:00:33.022563",
+    "refinamientos": 0
+  },
+  {
+    "estrategia": "Cuando la API de OpenAI falla por cuota excedida, informar al usuario del error y ofrecer alternativas (como esperar, usar otra herramienta, o reintentar más tarde)",
+    "cuando_usar": "Cuando cualquier tool que use la API de OpenAI falla con error de cuota",
+    "importancia": "alta",
+    "added_at": "2026-03-28T06:02:57.133660",
+    "refinamientos": 1,
+    "updated_at": "2026-04-05T15:01:46.135387"
   }
 ]
